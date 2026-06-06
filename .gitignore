@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test / type / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets and runtime host config (generated per install — never commit)
+.env
+proxmox-config/config.json
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
