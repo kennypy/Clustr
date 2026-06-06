@@ -125,7 +125,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def container_delete_request(
+    async def container_delete_request(
         node: Annotated[
             str, Field(description="Node name where the container resides")
         ],
@@ -144,7 +144,7 @@ def register(mcp: FastMCP) -> None:
                 f"container and all its local storage."
             )
 
-        return safe("container_delete_request", _do)
+        return await safe("container_delete_request", _do)
 
     @mcp.tool(
         name="container_delete_confirm",
@@ -159,7 +159,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def container_delete_confirm(
+    async def container_delete_confirm(
         confirmation_token: Annotated[
             str, Field(description="Token returned by container_delete_request")
         ],
@@ -180,4 +180,4 @@ def register(mcp: FastMCP) -> None:
                 f"permanently destroyed."
             )
 
-        return safe("container_delete_confirm", _do)
+        return await safe("container_delete_confirm", _do)

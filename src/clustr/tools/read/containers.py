@@ -136,12 +136,12 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def list_containers(
+    async def list_containers(
         node: Annotated[
             str, Field(description="Filter to a specific node name (optional).")
         ] = "",
     ) -> str:
-        return safe(
+        return await safe(
             "list_containers",
             lambda: _format_container_list(_list_containers(node.strip() or None)),
         )
@@ -155,13 +155,13 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_container(
+    async def get_container(
         node: _Node,
         ctid: Annotated[
             int, Field(ge=100, description="Container ID number (e.g. 103)")
         ],
     ) -> str:
-        return safe(
+        return await safe(
             "get_container",
             lambda: _format_container_detail(_get_container(node, ctid)),
         )
@@ -175,11 +175,11 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_container_status(
+    async def get_container_status(
         node: _Node,
         ctid: _CtId,
     ) -> str:
-        return safe(
+        return await safe(
             "get_container_status",
             lambda: _format_container_status(_get_container_status(node, ctid)),
         )
@@ -193,11 +193,11 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def list_container_snapshots(
+    async def list_container_snapshots(
         node: _Node,
         ctid: _CtId,
     ) -> str:
-        return safe(
+        return await safe(
             "list_container_snapshots",
             lambda: _format_snapshots(ctid, _list_container_snapshots(node, ctid)),
         )

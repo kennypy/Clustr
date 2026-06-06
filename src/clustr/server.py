@@ -106,6 +106,20 @@ def _transport_security() -> TransportSecuritySettings:
     return TransportSecuritySettings(allowed_hosts=hosts, allowed_origins=origins)
 
 
+def _resource_from_request(request: Request) -> str:
+    """
+    Best-effort canonical URL of this server from the incoming request.
+
+    Honors the X-Forwarded-Proto / X-Forwarded-Host headers set by a reverse
+    proxy (e.g. Cloudflare) so the advertised resource is the public HTTPS URL,
+    not the internal bind address.
+    """
+    headers = request.headers
+    proto = headers.get("x-forwarded-proto") or request.url.scheme
+    host = headers.get("x-forwarded-host") or headers.get("host") or request.url.netloc
+    return f"{proto}://{host}"
+
+
 def _build_mcp() -> FastMCP:
     """Construct the FastMCP server, register tools, and add custom routes."""
     mcp = FastMCP(
@@ -124,28 +138,33 @@ def _build_mcp() -> FastMCP:
         return JSONResponse({"status": "ok", "service": "clustr"})
 
     @mcp.custom_route(_OAUTH_META, methods=["GET"])  # type: ignore[untyped-decorator]
-    async def oauth_resource_metadata(_request: Request) -> JSONResponse:
+    async def oauth_resource_metadata(request: Request) -> JSONResponse:
         """
-        Anthropic directory requirement: OAuth 2.0 Protected Resource Metadata.
-        RFC 9728 — describes how to obtain access tokens for this resource.
+        Anthropic directory requirement: OAuth 2.0 Protected Resource Metadata
+        (RFC 9728) — tells clients which authorization server(s) issue tokens
+        for this resource.
 
-        The ``resource`` field is the canonical public URL of this server. We
-        publish it only when MCP_PUBLIC_URL is configured — never a localhost
-        placeholder, which would fail validation.
+        ``resource`` is required by RFC 9728 and is the canonical URL of this
+        server. Prefer the configured MCP_PUBLIC_URL; otherwise derive it from
+        the incoming request (behind Cloudflare the forwarded host/proto give
+        the real public URL).
         """
         settings = get_settings()
-        metadata: dict[str, object] = {
-            "authorization_servers": (
-                [settings.oauth.issuer]
-                if settings.oauth.enabled and settings.oauth.issuer
-                else []
-            ),
-            "bearer_methods_supported": ["header"],
-            "scopes_supported": ["clustr:read", "clustr:write"],
-        }
-        if settings.server.public_url:
-            metadata["resource"] = settings.server.public_url.rstrip("/")
-        return JSONResponse(metadata)
+        resource = settings.server.public_url.rstrip("/") or _resource_from_request(
+            request
+        )
+        return JSONResponse(
+            {
+                "resource": resource,
+                "authorization_servers": (
+                    [settings.oauth.issuer]
+                    if settings.oauth.enabled and settings.oauth.issuer
+                    else []
+                ),
+                "bearer_methods_supported": ["header"],
+                "scopes_supported": ["clustr:read", "clustr:write"],
+            }
+        )
 
     return mcp
 

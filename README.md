@@ -192,6 +192,34 @@ For read-only use, create a Proxmox user with `PVEAuditor` role. For write opera
 
 ---
 
+## Deployment
+
+Clustr binds to `127.0.0.1` and speaks plain HTTP. Terminate TLS and expose it
+publicly with a reverse proxy:
+
+- **Cloudflare Tunnel (recommended).** Point a tunnel at `http://127.0.0.1:8080`.
+  Set `MCP_PUBLIC_URL=https://clustr.your-domain.com` so the OAuth
+  protected-resource metadata advertises the correct HTTPS URL, and add that
+  host to the transport-security allow-list (it is added automatically from
+  `MCP_PUBLIC_URL`; add more via `MCP_ALLOWED_HOSTS`). Cloudflare forwards
+  `X-Forwarded-Proto`/`X-Forwarded-Host`, which Clustr uses to derive the
+  resource URL when `MCP_PUBLIC_URL` is unset.
+
+- **Scaling / multiple workers.** The two-step delete flow keeps confirmation
+  tokens **in process memory**. If you run more than one worker or replica,
+  enable **sticky sessions** on the proxy so a client's `*_delete_request` and
+  `*_delete_confirm` land on the same instance. (A single worker — the default —
+  needs nothing.)
+
+---
+
+## Privacy & Terms
+
+See [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md). Host these (or your own
+versions) and reference their URLs when submitting to a connector directory.
+
+---
+
 ## Development
 
 ```bash

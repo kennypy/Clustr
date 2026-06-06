@@ -90,7 +90,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_SAFE_WRITE,
     )
-    def create_container_snapshot(
+    async def create_container_snapshot(
         node: _Node,
         ctid: _CtId,
         snapname: Annotated[
@@ -118,7 +118,7 @@ def register(mcp: FastMCP) -> None:
                 f"Use `list_container_snapshots` to confirm when complete."
             )
 
-        return safe("create_container_snapshot", _do)
+        return await safe("create_container_snapshot", _do)
 
     @mcp.tool(
         name="delete_container_snapshot",
@@ -129,7 +129,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def delete_container_snapshot(
+    async def delete_container_snapshot(
         node: _Node,
         ctid: _CtId,
         snapname: Annotated[str, Field(description="Exact snapshot name to delete")],
@@ -142,7 +142,7 @@ def register(mcp: FastMCP) -> None:
                 f"Task ID: `{task_id}`"
             )
 
-        return safe("delete_container_snapshot", _do)
+        return await safe("delete_container_snapshot", _do)
 
     @mcp.tool(
         name="rollback_container_snapshot",
@@ -154,7 +154,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def rollback_container_snapshot(
+    async def rollback_container_snapshot(
         node: _Node,
         ctid: _CtId,
         snapname: Annotated[str, Field(description="Snapshot name to roll back to")],
@@ -168,4 +168,4 @@ def register(mcp: FastMCP) -> None:
                 f"⚠️ All changes after this snapshot was taken have been discarded."
             )
 
-        return safe("rollback_container_snapshot", _do)
+        return await safe("rollback_container_snapshot", _do)

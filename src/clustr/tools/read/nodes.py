@@ -128,8 +128,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def list_nodes() -> str:
-        return safe("list_nodes", lambda: _format_nodes(_list_nodes()))
+    async def list_nodes() -> str:
+        return await safe("list_nodes", lambda: _format_nodes(_list_nodes()))
 
     @mcp.tool(
         name="get_node",
@@ -141,8 +141,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_node(node: str) -> str:
-        return safe("get_node", lambda: _format_node_detail(_get_node(node)))
+    async def get_node(node: str) -> str:
+        return await safe("get_node", lambda: _format_node_detail(_get_node(node)))
 
     @mcp.tool(
         name="get_node_services",
@@ -154,8 +154,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_node_services(node: str) -> str:
-        return safe(
+    async def get_node_services(node: str) -> str:
+        return await safe(
             "get_node_services",
             lambda: _format_services(node, _get_node_services(node)),
         )
@@ -170,8 +170,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_cluster_status() -> str:
-        return safe(
+    async def get_cluster_status() -> str:
+        return await safe(
             "get_cluster_status", lambda: _format_cluster(_get_cluster_status())
         )
 

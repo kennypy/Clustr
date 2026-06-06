@@ -98,7 +98,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_SAFE_WRITE,
     )
-    def create_vm_snapshot(
+    async def create_vm_snapshot(
         node: _Node,
         vmid: _VmId,
         snapname: Annotated[
@@ -139,7 +139,7 @@ def register(mcp: FastMCP) -> None:
                 f"Use `list_vm_snapshots` to confirm when complete."
             )
 
-        return safe("create_vm_snapshot", _do)
+        return await safe("create_vm_snapshot", _do)
 
     @mcp.tool(
         name="delete_vm_snapshot",
@@ -150,7 +150,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def delete_vm_snapshot(
+    async def delete_vm_snapshot(
         node: _Node,
         vmid: _VmId,
         snapname: Annotated[str, Field(description="Exact snapshot name to delete")],
@@ -163,7 +163,7 @@ def register(mcp: FastMCP) -> None:
                 f"Task ID: `{task_id}`"
             )
 
-        return safe("delete_vm_snapshot", _do)
+        return await safe("delete_vm_snapshot", _do)
 
     @mcp.tool(
         name="rollback_vm_snapshot",
@@ -175,7 +175,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def rollback_vm_snapshot(
+    async def rollback_vm_snapshot(
         node: _Node,
         vmid: _VmId,
         snapname: Annotated[str, Field(description="Snapshot name to roll back to")],
@@ -189,4 +189,4 @@ def register(mcp: FastMCP) -> None:
                 f"⚠️ All changes after this snapshot was taken have been discarded."
             )
 
-        return safe("rollback_vm_snapshot", _do)
+        return await safe("rollback_vm_snapshot", _do)

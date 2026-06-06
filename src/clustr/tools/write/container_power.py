@@ -71,8 +71,8 @@ def register(mcp: FastMCP) -> None:
         description="Start a stopped LXC container. No effect if already running.",
         annotations=_SAFE_WRITE,
     )
-    def start_container(node: _Node, ctid: _CtId) -> str:
-        return safe("start_container", lambda: _run(node, ctid, "start"))
+    async def start_container(node: _Node, ctid: _CtId) -> str:
+        return await safe("start_container", lambda: _run(node, ctid, "start"))
 
     @mcp.tool(
         name="shutdown_container",
@@ -83,8 +83,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_SAFE_WRITE,
     )
-    def shutdown_container(node: _Node, ctid: _CtId) -> str:
-        return safe("shutdown_container", lambda: _run(node, ctid, "shutdown"))
+    async def shutdown_container(node: _Node, ctid: _CtId) -> str:
+        return await safe("shutdown_container", lambda: _run(node, ctid, "shutdown"))
 
     @mcp.tool(
         name="stop_container",
@@ -95,8 +95,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def stop_container(node: _Node, ctid: _CtId) -> str:
-        return safe("stop_container", lambda: _run(node, ctid, "stop"))
+    async def stop_container(node: _Node, ctid: _CtId) -> str:
+        return await safe("stop_container", lambda: _run(node, ctid, "stop"))
 
     @mcp.tool(
         name="reboot_container",
@@ -104,5 +104,5 @@ def register(mcp: FastMCP) -> None:
         description="Gracefully reboot a running LXC container.",
         annotations=_SAFE_WRITE,
     )
-    def reboot_container(node: _Node, ctid: _CtId) -> str:
-        return safe("reboot_container", lambda: _run(node, ctid, "reboot"))
+    async def reboot_container(node: _Node, ctid: _CtId) -> str:
+        return await safe("reboot_container", lambda: _run(node, ctid, "reboot"))

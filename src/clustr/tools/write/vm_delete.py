@@ -141,7 +141,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def vm_delete_request(
+    async def vm_delete_request(
         node: Annotated[str, Field(description="Node name where the VM resides")],
         vmid: Annotated[int, Field(ge=100, description="VM ID to delete")],
     ) -> str:
@@ -158,7 +158,7 @@ def register(mcp: FastMCP) -> None:
                 f"and all its local disks."
             )
 
-        return safe("vm_delete_request", _do)
+        return await safe("vm_delete_request", _do)
 
     @mcp.tool(
         name="vm_delete_confirm",
@@ -172,7 +172,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def vm_delete_confirm(
+    async def vm_delete_confirm(
         confirmation_token: Annotated[
             str, Field(description="Token returned by vm_delete_request")
         ],
@@ -189,4 +189,4 @@ def register(mcp: FastMCP) -> None:
                 f"The VM and all its local disks are being permanently destroyed."
             )
 
-        return safe("vm_delete_confirm", _do)
+        return await safe("vm_delete_confirm", _do)

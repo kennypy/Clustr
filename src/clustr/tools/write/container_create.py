@@ -100,7 +100,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
     )
-    def create_container(
+    async def create_container(
         node: Annotated[
             str,
             Field(description="Node to create the container on (e.g. 'pve')"),
@@ -218,4 +218,4 @@ def register(mcp: FastMCP) -> None:
                 f"Use `get_container_status` to check when the container is ready."
             )
 
-        return safe("create_container", _do)
+        return await safe("create_container", _do)

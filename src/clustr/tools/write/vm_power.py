@@ -77,8 +77,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_SAFE_WRITE,
     )
-    def start_vm(node: _Node, vmid: _VmId) -> str:
-        return safe("start_vm", lambda: _run(node, vmid, "start"))
+    async def start_vm(node: _Node, vmid: _VmId) -> str:
+        return await safe("start_vm", lambda: _run(node, vmid, "start"))
 
     @mcp.tool(
         name="shutdown_vm",
@@ -90,8 +90,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_SAFE_WRITE,
     )
-    def shutdown_vm(node: _Node, vmid: _VmId) -> str:
-        return safe("shutdown_vm", lambda: _run(node, vmid, "shutdown"))
+    async def shutdown_vm(node: _Node, vmid: _VmId) -> str:
+        return await safe("shutdown_vm", lambda: _run(node, vmid, "shutdown"))
 
     @mcp.tool(
         name="stop_vm",
@@ -103,8 +103,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def stop_vm(node: _Node, vmid: _VmId) -> str:
-        return safe("stop_vm", lambda: _run(node, vmid, "stop"))
+    async def stop_vm(node: _Node, vmid: _VmId) -> str:
+        return await safe("stop_vm", lambda: _run(node, vmid, "stop"))
 
     @mcp.tool(
         name="reboot_vm",
@@ -115,8 +115,8 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_SAFE_WRITE,
     )
-    def reboot_vm(node: _Node, vmid: _VmId) -> str:
-        return safe("reboot_vm", lambda: _run(node, vmid, "reboot"))
+    async def reboot_vm(node: _Node, vmid: _VmId) -> str:
+        return await safe("reboot_vm", lambda: _run(node, vmid, "reboot"))
 
     @mcp.tool(
         name="reset_vm",
@@ -128,5 +128,5 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    def reset_vm(node: _Node, vmid: _VmId) -> str:
-        return safe("reset_vm", lambda: _run(node, vmid, "reset"))
+    async def reset_vm(node: _Node, vmid: _VmId) -> str:
+        return await safe("reset_vm", lambda: _run(node, vmid, "reset"))

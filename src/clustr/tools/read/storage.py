@@ -92,12 +92,12 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def list_storage(
+    async def list_storage(
         node: Annotated[
             str, Field(description="Filter to a specific node (optional).")
         ] = "",
     ) -> str:
-        return safe(
+        return await safe(
             "list_storage",
             lambda: _format_storage_list(_list_storage(node.strip() or None)),
         )
@@ -111,13 +111,13 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_storage(
+    async def get_storage(
         node: Annotated[str, Field(description="Node name (e.g. 'pve')")],
         storage: Annotated[
             str, Field(description="Storage name (e.g. 'local-lvm', 'fast-media')")
         ],
     ) -> str:
-        return safe(
+        return await safe(
             "get_storage",
             lambda: _format_storage_detail(_get_storage(node, storage)),
         )

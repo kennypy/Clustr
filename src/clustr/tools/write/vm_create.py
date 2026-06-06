@@ -113,7 +113,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
     )
-    def create_vm(
+    async def create_vm(
         node: Annotated[
             str, Field(description="Node to create the VM on (e.g. 'pve')")
         ],
@@ -201,4 +201,4 @@ def register(mcp: FastMCP) -> None:
                 f"Use `get_vm_status` to check when the VM is ready."
             )
 
-        return safe("create_vm", _do)
+        return await safe("create_vm", _do)

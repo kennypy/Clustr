@@ -125,7 +125,7 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def list_vms(
+    async def list_vms(
         node: Annotated[
             str,
             Field(
@@ -134,7 +134,7 @@ def register(mcp: FastMCP) -> None:
             ),
         ] = "",
     ) -> str:
-        return safe(
+        return await safe(
             "list_vms", lambda: _format_vm_list(_list_vms(node.strip() or None))
         )
 
@@ -147,13 +147,13 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_vm(
+    async def get_vm(
         node: Annotated[
             str, Field(description="Node name where the VM resides (e.g. 'pve')")
         ],
         vmid: Annotated[int, Field(ge=100, description="VM ID number (e.g. 100)")],
     ) -> str:
-        return safe("get_vm", lambda: _format_vm_detail(_get_vm(node, vmid)))
+        return await safe("get_vm", lambda: _format_vm_detail(_get_vm(node, vmid)))
 
     @mcp.tool(
         name="get_vm_status",
@@ -164,11 +164,11 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def get_vm_status(
+    async def get_vm_status(
         node: Annotated[str, Field(description="Node name where the VM resides")],
         vmid: Annotated[int, Field(ge=100, description="VM ID number")],
     ) -> str:
-        return safe(
+        return await safe(
             "get_vm_status", lambda: _format_vm_status(_get_vm_status(node, vmid))
         )
 
@@ -181,11 +181,11 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_READ_ONLY,
     )
-    def list_vm_snapshots(
+    async def list_vm_snapshots(
         node: Annotated[str, Field(description="Node name where the VM resides")],
         vmid: Annotated[int, Field(ge=100, description="VM ID number")],
     ) -> str:
-        return safe(
+        return await safe(
             "list_vm_snapshots",
             lambda: _format_snapshots("VM", vmid, _list_vm_snapshots(node, vmid)),
         )
