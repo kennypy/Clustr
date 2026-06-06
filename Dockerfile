@@ -1,22 +1,31 @@
 # ---------------------------------------------------------------------------
 # Clustr — Proxmox MCP Server
-# Multi-stage build: builder installs deps, runtime is minimal
+# Multi-stage build: builder installs locked deps with uv, runtime is minimal.
+# Dependencies come from uv.lock via `uv sync --frozen`, so image builds are
+# reproducible (no surprise upstream version drift).
 # ---------------------------------------------------------------------------
 
 # Stage 1: builder
 FROM python:3.11-slim AS builder
 
-WORKDIR /build
+# Pinned uv binary (matches the uv version that generated uv.lock)
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /uvx /bin/
 
-# Install build deps
-RUN pip install --no-cache-dir hatchling
+WORKDIR /app
 
-# Copy only what's needed for dependency resolution first (layer caching)
-COPY pyproject.toml ./
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+# Install runtime deps from the lockfile first (cached layer; project not yet
+# copied so changing source doesn't bust the dependency cache).
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-editable
+
+# Install the project itself (README is referenced by pyproject metadata).
 COPY src/ ./src/
-
-# Install into a prefix we can copy cleanly
-RUN pip install --no-cache-dir --prefix=/install .
+COPY README.md ./
+RUN uv sync --frozen --no-editable
 
 # ---------------------------------------------------------------------------
 # Stage 2: runtime
@@ -24,11 +33,9 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /install /usr/local
-
-# Copy source
-COPY --from=builder /build/src /app/src
+# Copy the resolved virtualenv (project + locked deps) from the builder.
+COPY --from=builder /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Proxmox config directory (mount your config.json here)
 RUN mkdir -p /app/proxmox-config
@@ -50,4 +57,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
 
-CMD ["python", "-m", "clustr.server"]
+CMD ["clustr"]
