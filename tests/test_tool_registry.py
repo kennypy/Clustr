@@ -78,10 +78,17 @@ DESTRUCTIVE_NAMES = {
     "rollback_vm_snapshot",
     "delete_container_snapshot",
     "rollback_container_snapshot",
-    "vm_delete_request",
+    # Only the confirm step actually destroys anything. The request step (below)
+    # merely looks the target up and mints a token, so it is NOT destructive.
     "vm_delete_confirm",
-    "container_delete_request",
     "container_delete_confirm",
+}
+
+# Step 1 of the two-step delete flow: a side effect (mints a token) but destroys
+# nothing, so destructiveHint must be False.
+NON_DESTRUCTIVE_REQUEST_NAMES = {
+    "vm_delete_request",
+    "container_delete_request",
 }
 
 
@@ -135,3 +142,11 @@ async def test_destructive_tools_marked_correctly():
         assert (
             tool_map[name].annotations.destructiveHint is True
         ), f"Tool '{name}' should have destructiveHint = True"
+
+
+async def test_delete_request_steps_are_not_destructive():
+    tool_map = {t.name: t for t in await _tools()}
+    for name in NON_DESTRUCTIVE_REQUEST_NAMES:
+        assert (
+            tool_map[name].annotations.destructiveHint is False
+        ), f"Tool '{name}' (delete step 1) must have destructiveHint = False"

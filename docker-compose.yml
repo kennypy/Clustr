@@ -1,16 +1,17 @@
-version: "3.9"
-
 services:
   clustr:
     build: .
     container_name: clustr
     restart: unless-stopped
+    # Published to the host loopback only. The container binds 0.0.0.0 INSIDE
+    # the container (see Dockerfile), but it is exposed to 127.0.0.1 on the host
+    # so it is not reachable from the LAN. Put a reverse proxy / Cloudflare
+    # Tunnel in front (pointing at 127.0.0.1:8080) for remote access, and enable
+    # auth before exposing it publicly.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file:
       - .env
-    volumes:
-      - ./proxmox-config:/app/proxmox-config:ro
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]

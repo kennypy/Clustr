@@ -11,7 +11,6 @@ Transports:
 
 Middleware stack (outermost → innermost), applied to the HTTP app:
   OAuthMiddleware       → pass-through when OAUTH_ENABLED=false
-  HostVerifyMiddleware  → pass-through skeleton
   FastMCP Streamable HTTP app (with session-manager lifespan)
 
 Tool registration:
@@ -36,7 +35,6 @@ from starlette.responses import JSONResponse
 # Middleware
 from clustr.auth.oauth import OAuthMiddleware
 from clustr.config.settings import get_settings
-from clustr.middleware.host_verify import HostVerifyMiddleware
 
 # Tool modules
 from clustr.tools.read import containers as _read_containers
@@ -188,9 +186,9 @@ def _run_http() -> None:
     )
 
     # FastMCP builds the Starlette app (with the session-manager lifespan).
-    # Wrap it with our ASGI middleware — outermost first. Both middlewares
-    # pass lifespan/non-HTTP scopes straight through, so startup still runs.
-    asgi_app = OAuthMiddleware(HostVerifyMiddleware(mcp.streamable_http_app()))
+    # Wrap it with our ASGI middleware. OAuthMiddleware passes lifespan/non-HTTP
+    # scopes straight through, so startup still runs.
+    asgi_app = OAuthMiddleware(mcp.streamable_http_app())
 
     logger.info(
         "Clustr starting on %s:%s (OAuth: %s)",

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import threading
 import time
 from typing import Annotated, Any, cast
 
@@ -25,11 +26,18 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_TTL = 300
 _pending_deletes: dict[str, dict[str, Any]] = {}
+# Tools run in worker threads (anyio.to_thread), so the token store can be
+# touched concurrently. Guard every read/modify/write of _pending_deletes.
+_lock = threading.Lock()
 
+# Step 1 (request) destroys nothing — it only looks the container up and mints a
+# short-lived token — so it is not flagged destructive. Step 2 (confirm) is.
+_REQUEST = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
 _DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 
 def _purge_expired() -> None:
+    """Remove expired tokens. Caller must hold ``_lock``."""
     now = time.monotonic()
     expired = [t for t, v in _pending_deletes.items() if v["expires"] < now]
     for t in expired:
@@ -42,8 +50,6 @@ def _purge_expired() -> None:
 
 
 def _request_container_delete(node: str, ctid: int) -> dict[str, Any]:
-    _purge_expired()
-
     try:
         config = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).config.get())
         hostname = config.get("hostname", f"ct-{ctid}")
@@ -62,37 +68,42 @@ def _request_container_delete(node: str, ctid: int) -> dict[str, Any]:
         )
 
     token = secrets.token_hex(16)
-    _pending_deletes[token] = {
-        "node": node,
-        "ctid": ctid,
-        "hostname": hostname,
-        "expires": time.monotonic() + _TOKEN_TTL,
-    }
+    with _lock:
+        _purge_expired()
+        _pending_deletes[token] = {
+            "node": node,
+            "ctid": ctid,
+            "hostname": hostname,
+            "expires": time.monotonic() + _TOKEN_TTL,
+        }
 
     return {"token": token, "hostname": hostname, "ctid": ctid, "node": node}
 
 
 def _confirm_container_delete(confirmation_token: str, container_hostname: str) -> str:
-    _purge_expired()
+    # Atomically validate and consume the token so two concurrent confirms can't
+    # both pass before either deletes (the delete itself runs outside the lock).
+    with _lock:
+        _purge_expired()
 
-    pending = _pending_deletes.get(confirmation_token)
-    if pending is None:
-        raise ProxmoxError(
-            "Confirmation token not found or expired. "
-            "Call container_delete_request again to get a fresh token."
-        )
+        pending = _pending_deletes.get(confirmation_token)
+        if pending is None:
+            raise ProxmoxError(
+                "Confirmation token not found or expired. "
+                "Call container_delete_request again to get a fresh token."
+            )
 
-    if pending["hostname"] != container_hostname:
-        raise ProxmoxError(
-            f"Container hostname mismatch. "
-            f"Expected '{pending['hostname']}', got '{container_hostname}'. "
-            f"Provide the exact hostname returned by container_delete_request."
-        )
+        if pending["hostname"] != container_hostname:
+            raise ProxmoxError(
+                f"Container hostname mismatch. "
+                f"Expected '{pending['hostname']}', got '{container_hostname}'. "
+                f"Provide the exact hostname returned by container_delete_request."
+            )
 
-    node = pending["node"]
-    ctid = pending["ctid"]
+        node = pending["node"]
+        ctid = pending["ctid"]
 
-    del _pending_deletes[confirmation_token]
+        del _pending_deletes[confirmation_token]
 
     return cast(
         str,
@@ -123,7 +134,7 @@ def register(mcp: FastMCP) -> None:
             "hostname to complete the deletion. Token expires in 5 minutes. "
             "The container must be stopped before deletion."
         ),
-        annotations=_DESTRUCTIVE,
+        annotations=_REQUEST,
     )
     async def container_delete_request(
         node: Annotated[
