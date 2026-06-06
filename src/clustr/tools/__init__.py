@@ -23,6 +23,21 @@ from clustr.proxmox.client import ProxmoxError
 logger = logging.getLogger(__name__)
 
 
+def needs_confirm(action: str, target: str) -> str:
+    """
+    Standard 'not executed — confirm first' message for destructive tools.
+
+    ``action`` is a short verb phrase (e.g. "force-stop"); ``target`` names the
+    object (e.g. "VM 100 on pve"). Returned when a destructive tool is called
+    without ``confirm=true``.
+    """
+    return (
+        f"🔎 **Review — not executed.** This will {action} {target}, which is "
+        f"destructive and may cause data loss. Call this tool again with the "
+        f"same arguments plus `confirm=true` to proceed."
+    )
+
+
 async def safe(label: str, fn: Callable[[], str]) -> str:
     """
     Run a blocking tool thunk in a worker thread, converting any failure

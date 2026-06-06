@@ -18,7 +18,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from clustr.proxmox.client import get_client, proxmox_post
-from clustr.tools import safe
+from clustr.tools import needs_confirm, safe
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,13 @@ _DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 _Node = Annotated[str, Field(description="Node name")]
 _VmId = Annotated[int, Field(ge=100, description="VM ID")]
+_Confirm = Annotated[
+    bool,
+    Field(
+        description="Must be true to execute this destructive operation. When "
+        "false (default), returns a confirmation prompt without acting."
+    ),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -154,8 +161,13 @@ def register(mcp: FastMCP) -> None:
         node: _Node,
         vmid: _VmId,
         snapname: Annotated[str, Field(description="Exact snapshot name to delete")],
+        confirm: _Confirm = False,
     ) -> str:
         def _do() -> str:
+            if not confirm:
+                return needs_confirm(
+                    "delete snapshot", f"**{snapname}** of VM {vmid} on {node}"
+                )
             task_id = _delete_vm_snapshot(node, vmid, snapname)
             return (
                 f"✅ Snapshot **{snapname}** deletion started for VM "
@@ -179,8 +191,15 @@ def register(mcp: FastMCP) -> None:
         node: _Node,
         vmid: _VmId,
         snapname: Annotated[str, Field(description="Snapshot name to roll back to")],
+        confirm: _Confirm = False,
     ) -> str:
         def _do() -> str:
+            if not confirm:
+                return needs_confirm(
+                    "roll back to snapshot",
+                    f"**{snapname}** on VM {vmid} ({node}) — discarding all later "
+                    f"changes",
+                )
             task_id = _rollback_vm_snapshot(node, vmid, snapname)
             return (
                 f"✅ Rollback to snapshot **{snapname}** started for VM "

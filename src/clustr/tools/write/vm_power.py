@@ -22,7 +22,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from clustr.proxmox.client import ProxmoxError, get_client, proxmox_post
-from clustr.tools import safe
+from clustr.tools import needs_confirm, safe
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,13 @@ _DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 _Node = Annotated[str, Field(description="Node name (e.g. 'pve')")]
 _VmId = Annotated[int, Field(ge=100, description="VM ID")]
+_Confirm = Annotated[
+    bool,
+    Field(
+        description="Must be true to execute this destructive operation. When "
+        "false (default), returns a confirmation prompt without acting."
+    ),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +110,13 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    async def stop_vm(node: _Node, vmid: _VmId) -> str:
-        return await safe("stop_vm", lambda: _run(node, vmid, "stop"))
+    async def stop_vm(node: _Node, vmid: _VmId, confirm: _Confirm = False) -> str:
+        def _do() -> str:
+            if not confirm:
+                return needs_confirm("force-stop", f"VM {vmid} on {node}")
+            return _run(node, vmid, "stop")
+
+        return await safe("stop_vm", _do)
 
     @mcp.tool(
         name="reboot_vm",
@@ -128,5 +140,10 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    async def reset_vm(node: _Node, vmid: _VmId) -> str:
-        return await safe("reset_vm", lambda: _run(node, vmid, "reset"))
+    async def reset_vm(node: _Node, vmid: _VmId, confirm: _Confirm = False) -> str:
+        def _do() -> str:
+            if not confirm:
+                return needs_confirm("hard-reset", f"VM {vmid} on {node}")
+            return _run(node, vmid, "reset")
+
+        return await safe("reset_vm", _do)

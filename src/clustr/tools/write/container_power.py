@@ -20,7 +20,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from clustr.proxmox.client import ProxmoxError, get_client, proxmox_post
-from clustr.tools import safe
+from clustr.tools import needs_confirm, safe
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,13 @@ _DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 _Node = Annotated[str, Field(description="Node name (e.g. 'pve')")]
 _CtId = Annotated[int, Field(ge=100, description="Container ID")]
+_Confirm = Annotated[
+    bool,
+    Field(
+        description="Must be true to execute this destructive operation. When "
+        "false (default), returns a confirmation prompt without acting."
+    ),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -95,8 +102,15 @@ def register(mcp: FastMCP) -> None:
         ),
         annotations=_DESTRUCTIVE,
     )
-    async def stop_container(node: _Node, ctid: _CtId) -> str:
-        return await safe("stop_container", lambda: _run(node, ctid, "stop"))
+    async def stop_container(
+        node: _Node, ctid: _CtId, confirm: _Confirm = False
+    ) -> str:
+        def _do() -> str:
+            if not confirm:
+                return needs_confirm("force-stop", f"container {ctid} on {node}")
+            return _run(node, ctid, "stop")
+
+        return await safe("stop_container", _do)
 
     @mcp.tool(
         name="reboot_container",

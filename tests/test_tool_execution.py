@@ -95,3 +95,31 @@ async def test_create_vm_confirm_true_creates():
     assert "creation started" in out
     assert "UPID:create-vm" in out
     assert "vmbr1" in out  # custom bridge flowed through
+
+
+async def test_destructive_tool_requires_confirm():
+    """stop_vm without confirm=true must not touch Proxmox."""
+    from clustr.server import mcp
+
+    with patch("clustr.tools.write.vm_power.get_client") as gc:
+        out = _text(await mcp.call_tool("stop_vm", {"node": "pve", "vmid": 100}))
+
+    assert "not executed" in out
+    assert "confirm=true" in out
+    gc.assert_not_called()
+
+
+async def test_destructive_tool_confirm_true_executes():
+    """stop_vm with confirm=true issues the force-stop."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.nodes.return_value.qemu.return_value.status.stop.post.return_value = (
+        "UPID:stop"
+    )
+    args = {"node": "pve", "vmid": 100, "confirm": True}
+    with patch("clustr.tools.write.vm_power.get_client", return_value=fake):
+        out = _text(await mcp.call_tool("stop_vm", args))
+
+    assert "stop" in out
+    assert "UPID:stop" in out

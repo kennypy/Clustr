@@ -18,7 +18,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from clustr.proxmox.client import get_client, proxmox_post
-from clustr.tools import safe
+from clustr.tools import needs_confirm, safe
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,13 @@ _DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 _Node = Annotated[str, Field(description="Node name")]
 _CtId = Annotated[int, Field(ge=100, description="Container ID")]
+_Confirm = Annotated[
+    bool,
+    Field(
+        description="Must be true to execute this destructive operation. When "
+        "false (default), returns a confirmation prompt without acting."
+    ),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +140,14 @@ def register(mcp: FastMCP) -> None:
         node: _Node,
         ctid: _CtId,
         snapname: Annotated[str, Field(description="Exact snapshot name to delete")],
+        confirm: _Confirm = False,
     ) -> str:
         def _do() -> str:
+            if not confirm:
+                return needs_confirm(
+                    "delete snapshot",
+                    f"**{snapname}** of container {ctid} on {node}",
+                )
             task_id = _delete_container_snapshot(node, ctid, snapname)
             return (
                 f"✅ Snapshot **{snapname}** deletion started for "
@@ -158,8 +171,15 @@ def register(mcp: FastMCP) -> None:
         node: _Node,
         ctid: _CtId,
         snapname: Annotated[str, Field(description="Snapshot name to roll back to")],
+        confirm: _Confirm = False,
     ) -> str:
         def _do() -> str:
+            if not confirm:
+                return needs_confirm(
+                    "roll back to snapshot",
+                    f"**{snapname}** on container {ctid} ({node}) — discarding all "
+                    f"later changes",
+                )
             task_id = _rollback_container_snapshot(node, ctid, snapname)
             return (
                 f"✅ Rollback to snapshot **{snapname}** started for "
