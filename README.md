@@ -18,7 +18,7 @@ Clustr exposes your Proxmox VE infrastructure as MCP tools so you can manage nod
 
 ---
 
-## Tools (38 total)
+## Tools (35 total)
 
 ### Read (14)
 | Tool | Description |
