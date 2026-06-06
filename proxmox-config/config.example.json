@@ -1,0 +1,25 @@
+{
+  "_comment": "Copy to proxmox-config/config.json and fill in your values.",
+  "_comment2": "Alternatively use a .env file — see .env.example.",
+  "proxmox": {
+    "host": "192.168.1.1",
+    "port": 8006,
+    "user": "root@pam",
+    "token_name": "clustr",
+    "token_value": "YOUR-TOKEN-SECRET-HERE",
+    "verify_ssl": false
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "log_level": "INFO"
+  },
+  "oauth": {
+    "enabled": false,
+    "issuer": "",
+    "client_id": "clustr",
+    "client_secret": "",
+    "audience": "clustr-mcp",
+    "jwks_uri": ""
+  }
+}
