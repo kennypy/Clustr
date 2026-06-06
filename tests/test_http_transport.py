@@ -8,6 +8,7 @@ the real Starlette app (with its session-manager lifespan running).
 Note: the session manager's lifespan may only run once per app instance, so a
 single TestClient context is shared across the assertions below.
 """
+
 import os
 
 import pytest

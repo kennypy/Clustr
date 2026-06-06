@@ -1,6 +1,6 @@
 """Tests for configuration loading."""
+
 import os
-import pytest
 from unittest.mock import patch
 
 
@@ -15,6 +15,7 @@ def test_settings_defaults():
     with patch.dict(os.environ, env, clear=False):
         # Clear cache before test
         from clustr.config.settings import get_settings
+
         get_settings.cache_clear()
         settings = get_settings()
 
@@ -36,6 +37,7 @@ def test_oauth_disabled_by_default():
     }
     with patch.dict(os.environ, env, clear=False):
         from clustr.config.settings import get_settings
+
         get_settings.cache_clear()
         settings = get_settings()
         assert settings.oauth.enabled is False
@@ -54,6 +56,7 @@ def test_oauth_can_be_enabled():
     }
     with patch.dict(os.environ, env, clear=False):
         from clustr.config.settings import get_settings
+
         get_settings.cache_clear()
         settings = get_settings()
         assert settings.oauth.enabled is True

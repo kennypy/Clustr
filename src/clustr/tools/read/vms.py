@@ -3,6 +3,7 @@ Read-only tools for QEMU virtual machine information.
 
 All tools: readOnlyHint = True, destructiveHint = False.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,6 +26,7 @@ _READ_ONLY = ToolAnnotations(
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _list_vms(node: str | None = None) -> list[dict[str, Any]]:
     if node:
@@ -110,6 +112,7 @@ def _list_vm_snapshots(node: str, vmid: int) -> list[dict[str, Any]]:
 # Tool registration
 # ---------------------------------------------------------------------------
 
+
 def register(mcp: FastMCP) -> None:
     """Register all VM read tools onto the given FastMCP instance."""
 
@@ -131,7 +134,9 @@ def register(mcp: FastMCP) -> None:
             ),
         ] = "",
     ) -> str:
-        return safe("list_vms", lambda: _format_vm_list(_list_vms(node.strip() or None)))
+        return safe(
+            "list_vms", lambda: _format_vm_list(_list_vms(node.strip() or None))
+        )
 
     @mcp.tool(
         name="get_vm",
@@ -143,7 +148,9 @@ def register(mcp: FastMCP) -> None:
         annotations=_READ_ONLY,
     )
     def get_vm(
-        node: Annotated[str, Field(description="Node name where the VM resides (e.g. 'pve')")],
+        node: Annotated[
+            str, Field(description="Node name where the VM resides (e.g. 'pve')")
+        ],
         vmid: Annotated[int, Field(ge=100, description="VM ID number (e.g. 100)")],
     ) -> str:
         return safe("get_vm", lambda: _format_vm_detail(_get_vm(node, vmid)))
@@ -161,7 +168,9 @@ def register(mcp: FastMCP) -> None:
         node: Annotated[str, Field(description="Node name where the VM resides")],
         vmid: Annotated[int, Field(ge=100, description="VM ID number")],
     ) -> str:
-        return safe("get_vm_status", lambda: _format_vm_status(_get_vm_status(node, vmid)))
+        return safe(
+            "get_vm_status", lambda: _format_vm_status(_get_vm_status(node, vmid))
+        )
 
     @mcp.tool(
         name="list_vm_snapshots",
@@ -185,6 +194,7 @@ def register(mcp: FastMCP) -> None:
 # ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
+
 
 def _format_vm_list(vms: list[dict[str, Any]]) -> str:
     if not vms:
@@ -223,7 +233,8 @@ def _format_vm_status(s: dict[str, Any]) -> str:
         f"{icon} **State:** {s['status']} ({s['qemu_status']})\n"
         f"**CPU:** {s['cpu_usage_pct']}%\n"
         f"**Memory:** {s['memory_used_mb']} / {s['memory_total_mb']} MB\n"
-        f"**Disk I/O:** ↑ {s['disk_write_mb']} MB written, ↓ {s['disk_read_mb']} MB read\n"
+        f"**Disk I/O:** ↑ {s['disk_write_mb']} MB written, "
+        f"↓ {s['disk_read_mb']} MB read\n"
         f"**Network:** ↑ {s['net_out_mb']} MB out, ↓ {s['net_in_mb']} MB in\n"
         f"**Uptime:** {s['uptime_hours']} hours\n"
     )

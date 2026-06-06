@@ -3,6 +3,7 @@ Read-only tools for Proxmox storage information.
 
 All tools: readOnlyHint = True, destructiveHint = False.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +27,7 @@ _READ_ONLY = ToolAnnotations(
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _list_storage(node: str | None = None) -> list[dict[str, Any]]:
     if node:
         pools = proxmox_get(lambda: get_client().nodes(node).storage.get())
@@ -45,9 +47,11 @@ def _list_storage(node: str | None = None) -> list[dict[str, Any]]:
             "available_gb": round(
                 (p.get("maxdisk", 0) - p.get("disk", 0)) / 1024**3, 2
             ),
-            "used_pct": round(
-                (p.get("disk", 0) / p.get("maxdisk", 1)) * 100, 1
-            ) if p.get("maxdisk") else 0,
+            "used_pct": (
+                round((p.get("disk", 0) / p.get("maxdisk", 1)) * 100, 1)
+                if p.get("maxdisk")
+                else 0
+            ),
         }
         for p in pools
     ]
@@ -62,15 +66,18 @@ def _get_storage(node: str, storage: str) -> dict[str, Any]:
         "total_gb": round(info.get("total", 0) / 1024**3, 2),
         "used_gb": round(info.get("used", 0) / 1024**3, 2),
         "available_gb": round(info.get("avail", 0) / 1024**3, 2),
-        "used_pct": round(
-            (info.get("used", 0) / info.get("total", 1)) * 100, 1
-        ) if info.get("total") else 0,
+        "used_pct": (
+            round((info.get("used", 0) / info.get("total", 1)) * 100, 1)
+            if info.get("total")
+            else 0
+        ),
     }
 
 
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register all storage read tools onto the given FastMCP instance."""
@@ -110,12 +117,16 @@ def register(mcp: FastMCP) -> None:
             str, Field(description="Storage name (e.g. 'local-lvm', 'fast-media')")
         ],
     ) -> str:
-        return safe("get_storage", lambda: _format_storage_detail(_get_storage(node, storage)))
+        return safe(
+            "get_storage",
+            lambda: _format_storage_detail(_get_storage(node, storage)),
+        )
 
 
 # ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
+
 
 def _format_storage_list(pools: list[dict[str, Any]]) -> str:
     if not pools:

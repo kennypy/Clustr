@@ -19,6 +19,7 @@ Tool registration:
   means creating it in tools/read/ or tools/write/ and calling its module's
   ``register`` in ``_register_all`` below.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,6 +53,8 @@ from clustr.tools.write import vm_power as _write_vm_power
 from clustr.tools.write import vm_snapshots as _write_vm_snapshots
 
 logger = logging.getLogger(__name__)
+
+_OAUTH_META = "/.well-known/oauth-protected-resource"
 
 # Every module that contributes tools, read first then write.
 _TOOL_MODULES = (
@@ -116,11 +119,11 @@ def _build_mcp() -> FastMCP:
     )
     _register_all(mcp)
 
-    @mcp.custom_route("/health", methods=["GET"])
+    @mcp.custom_route("/health", methods=["GET"])  # type: ignore[untyped-decorator]
     async def health(_request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "clustr"})
 
-    @mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
+    @mcp.custom_route(_OAUTH_META, methods=["GET"])  # type: ignore[untyped-decorator]
     async def oauth_resource_metadata(_request: Request) -> JSONResponse:
         """
         Anthropic directory requirement: OAuth 2.0 Protected Resource Metadata.
@@ -154,6 +157,7 @@ mcp = _build_mcp()
 # ---------------------------------------------------------------------------
 # Runners
 # ---------------------------------------------------------------------------
+
 
 def _run_http() -> None:
     """Start the Streamable HTTP server (primary transport)."""

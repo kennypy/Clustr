@@ -8,6 +8,7 @@ UI exists for complex configurations.
 destructiveHint = False: creating a VM is additive, not destructive.
 readOnlyHint = False: this is a mutating operation.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 # Valid OS types Proxmox accepts
 _OsType = Literal[
-    "l26",      # Linux 2.6+
-    "l24",      # Linux 2.4
-    "win11",    # Windows 11
-    "win10",    # Windows 10/2016/2019
-    "win8",     # Windows 8.x/2012
-    "win7",     # Windows 7/2008
-    "wxp",      # Windows XP/2003
+    "l26",  # Linux 2.6+
+    "l24",  # Linux 2.4
+    "win11",  # Windows 11
+    "win10",  # Windows 10/2016/2019
+    "win8",  # Windows 8.x/2012
+    "win7",  # Windows 7/2008
+    "wxp",  # Windows XP/2003
     "solaris",
     "other",
 ]
@@ -39,6 +40,7 @@ _OsType = Literal[
 # ---------------------------------------------------------------------------
 # Tool implementation
 # ---------------------------------------------------------------------------
+
 
 def _create_vm(
     node: str,
@@ -80,7 +82,7 @@ def _create_vm(
         # If ISO provided, prefer booting from CD first for OS install
         params["boot"] = "order=ide2;scsi0"
 
-    task_id = proxmox_post(lambda: get_client().nodes(node).qemu.post(**params))
+    task_id: str = proxmox_post(lambda: get_client().nodes(node).qemu.post(**params))
 
     if start_after_create:
         try:
@@ -94,6 +96,7 @@ def _create_vm(
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register the create_vm tool onto the given FastMCP instance."""
@@ -111,44 +114,64 @@ def register(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
     )
     def create_vm(
-        node: Annotated[str, Field(description="Node to create the VM on (e.g. 'pve')")],
+        node: Annotated[
+            str, Field(description="Node to create the VM on (e.g. 'pve')")
+        ],
         vmid: Annotated[
             int,
-            Field(ge=100, le=999999, description="Unique VM ID (100–999999). Must not already exist."),
+            Field(
+                ge=100,
+                le=999999,
+                description="Unique VM ID (100–999999). Must not already exist.",
+            ),
         ],
         name: Annotated[
-            str, Field(description="VM name (alphanumeric, hyphens allowed, max 64 chars)")
+            str,
+            Field(description="VM name (alphanumeric, hyphens allowed, max 64 chars)"),
         ],
         cores: Annotated[
             int, Field(ge=1, le=128, description="Number of CPU cores (default: 2)")
         ] = 2,
-        memory_mb: Annotated[int, Field(ge=256, description="Memory in MB (default: 2048)")] = 2048,
-        disk_gb: Annotated[int, Field(ge=1, description="Primary disk size in GB (default: 32)")] = 32,
+        memory_mb: Annotated[
+            int, Field(ge=256, description="Memory in MB (default: 2048)")
+        ] = 2048,
+        disk_gb: Annotated[
+            int, Field(ge=1, description="Primary disk size in GB (default: 32)")
+        ] = 32,
         storage: Annotated[
             str,
             Field(
-                description="Storage pool for the disk (e.g. 'local-lvm', 'vm-storage'). "
-                "Use list_storage to find available pools."
+                description="Storage pool for the disk (e.g. 'local-lvm', "
+                "'vm-storage'). Use list_storage to find available pools."
             ),
         ] = "local-lvm",
         os_type: Annotated[
             _OsType,
             Field(
-                description="OS type hint: l26 (Linux), win11, win10, win8, other. Default: l26"
+                description="OS type hint: l26 (Linux), win11, win10, win8, "
+                "other. Default: l26"
             ),
         ] = "l26",
         iso_path: Annotated[
             str,
             Field(
-                description="Optional: Path to ISO on Proxmox storage for OS install, "
-                "e.g. 'local:iso/ubuntu-24.04.iso'. Leave empty for diskless."
+                description="Optional: Path to ISO on Proxmox storage for OS "
+                "install, e.g. 'local:iso/ubuntu-24.04.iso'. Leave empty for "
+                "diskless."
             ),
         ] = "",
         onboot: Annotated[
-            bool, Field(description="Start VM automatically on Proxmox boot (default: false)")
+            bool,
+            Field(
+                description="Start VM automatically on Proxmox boot " "(default: false)"
+            ),
         ] = False,
         start_after_create: Annotated[
-            bool, Field(description="Start the VM immediately after creation (default: false)")
+            bool,
+            Field(
+                description="Start the VM immediately after creation "
+                "(default: false)"
+            ),
         ] = False,
     ) -> str:
         def _do() -> str:

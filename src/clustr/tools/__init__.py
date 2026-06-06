@@ -5,6 +5,7 @@ Shared helpers for Clustr tool modules.
 caller — every error becomes actionable text instead. Proxmox-level errors
 are surfaced verbatim; anything unexpected is logged and reported generically.
 """
+
 from __future__ import annotations
 
 import logging

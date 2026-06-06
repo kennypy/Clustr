@@ -6,12 +6,13 @@ Same pattern as vm_delete.py. Separate token store for containers.
 Step 1: container_delete_request  → returns token + container hostname
 Step 2: container_delete_confirm  → requires token + exact hostname
 """
+
 from __future__ import annotations
 
 import logging
 import secrets
 import time
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -39,6 +40,7 @@ def _purge_expired() -> None:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _request_container_delete(node: str, ctid: int) -> dict[str, Any]:
     _purge_expired()
 
@@ -50,7 +52,9 @@ def _request_container_delete(node: str, ctid: int) -> dict[str, Any]:
             f"Container {ctid} not found on node '{node}': {exc}"
         ) from exc
 
-    status = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).status.current.get())
+    status = proxmox_get(
+        lambda: get_client().nodes(node).lxc(ctid).status.current.get()
+    )
     if status.get("status") == "running":
         raise ProxmoxError(
             f"Container {ctid} ({hostname}) is currently running. "
@@ -90,11 +94,14 @@ def _confirm_container_delete(confirmation_token: str, container_hostname: str) 
 
     del _pending_deletes[confirmation_token]
 
-    return proxmox_post(
-        lambda: get_client()
-        .nodes(node)
-        .lxc(ctid)
-        .delete(purge=1, destroy_unreferenced_disks=1)
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client()
+            .nodes(node)
+            .lxc(ctid)
+            .delete(purge=1, destroy_unreferenced_disks=1)
+        ),
     )
 
 
@@ -102,8 +109,9 @@ def _confirm_container_delete(confirmation_token: str, container_hostname: str) 
 # Tool registration
 # ---------------------------------------------------------------------------
 
+
 def register(mcp: FastMCP) -> None:
-    """Register the two-step container deletion tools onto the given FastMCP instance."""
+    """Register the two-step container deletion tools onto the FastMCP instance."""
 
     @mcp.tool(
         name="container_delete_request",
@@ -118,7 +126,9 @@ def register(mcp: FastMCP) -> None:
         annotations=_DESTRUCTIVE,
     )
     def container_delete_request(
-        node: Annotated[str, Field(description="Node name where the container resides")],
+        node: Annotated[
+            str, Field(description="Node name where the container resides")
+        ],
         ctid: Annotated[int, Field(ge=100, description="Container ID to delete")],
     ) -> str:
         def _do() -> str:
@@ -143,7 +153,8 @@ def register(mcp: FastMCP) -> None:
             "Step 2 of 2: Permanently delete an LXC container. "
             "Requires the confirmation_token from container_delete_request AND "
             "the exact container hostname. "
-            "WARNING: This permanently destroys the container and all its local storage. "
+            "WARNING: This permanently destroys the container and all its "
+            "local storage. "
             "This action cannot be undone."
         ),
         annotations=_DESTRUCTIVE,
@@ -165,7 +176,8 @@ def register(mcp: FastMCP) -> None:
             return (
                 f"💀 Container **{container_hostname}** deletion started.\n"
                 f"Task ID: `{task_id}`\n\n"
-                f"The container and all its local storage are being permanently destroyed."
+                f"The container and all its local storage are being "
+                f"permanently destroyed."
             )
 
         return safe("container_delete_confirm", _do)

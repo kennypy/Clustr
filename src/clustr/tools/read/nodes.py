@@ -7,6 +7,7 @@ All tools in this module are registered with:
 
 These tools never mutate any state on the Proxmox cluster.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +29,7 @@ _READ_ONLY = ToolAnnotations(
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _list_nodes() -> list[dict[str, Any]]:
     nodes = proxmox_get(lambda: get_client().nodes.get())
@@ -79,22 +81,20 @@ def _get_cluster_status() -> dict[str, Any]:
     cluster = proxmox_get(lambda: get_client().cluster.status.get())
     resources = proxmox_get(lambda: get_client().cluster.resources.get())
 
-    nodes_online = sum(1 for item in cluster if item.get("type") == "node" and item.get("online"))
+    nodes_online = sum(
+        1 for item in cluster if item.get("type") == "node" and item.get("online")
+    )
     nodes_total = sum(1 for item in cluster if item.get("type") == "node")
-    quorum = next(
+    quorum: dict[str, Any] = next(
         (item for item in cluster if item.get("type") == "cluster"), {}
     )
 
     vms_running = sum(
-        1
-        for r in resources
-        if r.get("type") == "qemu" and r.get("status") == "running"
+        1 for r in resources if r.get("type") == "qemu" and r.get("status") == "running"
     )
     vms_total = sum(1 for r in resources if r.get("type") == "qemu")
     cts_running = sum(
-        1
-        for r in resources
-        if r.get("type") == "lxc" and r.get("status") == "running"
+        1 for r in resources if r.get("type") == "lxc" and r.get("status") == "running"
     )
     cts_total = sum(1 for r in resources if r.get("type") == "lxc")
 
@@ -113,6 +113,7 @@ def _get_cluster_status() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register all node read tools onto the given FastMCP instance."""
@@ -170,12 +171,15 @@ def register(mcp: FastMCP) -> None:
         annotations=_READ_ONLY,
     )
     def get_cluster_status() -> str:
-        return safe("get_cluster_status", lambda: _format_cluster(_get_cluster_status()))
+        return safe(
+            "get_cluster_status", lambda: _format_cluster(_get_cluster_status())
+        )
 
 
 # ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
+
 
 def _format_nodes(nodes: list[dict[str, Any]]) -> str:
     if not nodes:
@@ -195,7 +199,8 @@ def _format_nodes(nodes: list[dict[str, Any]]) -> str:
 def _format_node_detail(n: dict[str, Any]) -> str:
     return (
         f"## Node: {n['node']}\n\n"
-        f"**CPU:** {n['cpu_usage_pct']}% used | {n['cpu_cores']} cores | {n['cpu_model']}\n"
+        f"**CPU:** {n['cpu_usage_pct']}% used | {n['cpu_cores']} cores | "
+        f"{n['cpu_model']}\n"
         f"**Memory:** {n['memory_used_gb']} / {n['memory_total_gb']} GB\n"
         f"**Disk (root):** {n['disk_used_gb']} / {n['disk_total_gb']} GB\n"
         f"**Uptime:** {n['uptime_hours']} hours\n"
@@ -221,5 +226,6 @@ def _format_cluster(c: dict[str, Any]) -> str:
         f"**Quorum:** {quorum_icon}\n"
         f"**Nodes:** {c['nodes_online']} / {c['nodes_total']} online\n"
         f"**VMs:** {c['vms_running']} running / {c['vms_total']} total\n"
-        f"**Containers:** {c['containers_running']} running / {c['containers_total']} total\n"
+        f"**Containers:** {c['containers_running']} running / "
+        f"{c['containers_total']} total\n"
     )

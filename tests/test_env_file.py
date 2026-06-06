@@ -6,14 +6,21 @@ This guards the bug where nested settings models (Proxmox/OAuth/Server) read
 os.environ but ignored the .env file, crashing the documented
 ``cp .env.example .env && clustr`` workflow.
 """
-import pytest
 
 # Every env var that could shadow the .env file and mask a regression.
 _SHADOW_VARS = [
-    "PROXMOX_HOST", "PROXMOX_PORT", "PROXMOX_USER", "PROXMOX_TOKEN_NAME",
-    "PROXMOX_TOKEN_VALUE", "PROXMOX_VERIFY_SSL",
-    "MCP_HOST", "MCP_PORT", "MCP_LOG_LEVEL", "MCP_PUBLIC_URL",
-    "OAUTH_ENABLED", "OAUTH_ISSUER",
+    "PROXMOX_HOST",
+    "PROXMOX_PORT",
+    "PROXMOX_USER",
+    "PROXMOX_TOKEN_NAME",
+    "PROXMOX_TOKEN_VALUE",
+    "PROXMOX_VERIFY_SSL",
+    "MCP_HOST",
+    "MCP_PORT",
+    "MCP_LOG_LEVEL",
+    "MCP_PUBLIC_URL",
+    "OAUTH_ENABLED",
+    "OAUTH_ISSUER",
 ]
 
 
@@ -38,6 +45,7 @@ def test_settings_load_from_dotenv_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     from clustr.config.settings import get_settings
+
     get_settings.cache_clear()
     try:
         settings = get_settings()
@@ -66,6 +74,7 @@ def test_server_host_defaults_to_loopback(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     from clustr.config.settings import get_settings
+
     get_settings.cache_clear()
     try:
         settings = get_settings()

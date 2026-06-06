@@ -15,12 +15,13 @@ the intent of both calls in the flow is destruction.
 Tokens are stored in-process memory (dict). They expire after 5 minutes.
 On server restart all pending tokens are cleared — user must re-request.
 """
+
 from __future__ import annotations
 
 import logging
 import secrets
 import time
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -53,6 +54,7 @@ def _purge_expired() -> None:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _request_vm_delete(node: str, vmid: int) -> dict[str, Any]:
     """Look up the VM, register a delete token, return token + VM name."""
     _purge_expired()
@@ -65,7 +67,9 @@ def _request_vm_delete(node: str, vmid: int) -> dict[str, Any]:
         raise ProxmoxError(f"VM {vmid} not found on node '{node}': {exc}") from exc
 
     # Check VM is not running
-    status = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).status.current.get())
+    status = proxmox_get(
+        lambda: get_client().nodes(node).qemu(vmid).status.current.get()
+    )
     if status.get("status") == "running":
         raise ProxmoxError(
             f"VM {vmid} ({vm_name}) is currently running. "
@@ -106,17 +110,21 @@ def _confirm_vm_delete(confirmation_token: str, vm_name: str) -> str:
     # Consume the token — can only be used once
     del _pending_deletes[confirmation_token]
 
-    return proxmox_post(
-        lambda: get_client()
-        .nodes(node)
-        .qemu(vmid)
-        .delete(purge=1, destroy_unreferenced_disks=1)
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client()
+            .nodes(node)
+            .qemu(vmid)
+            .delete(purge=1, destroy_unreferenced_disks=1)
+        ),
     )
 
 
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register the two-step VM deletion tools onto the given FastMCP instance."""
@@ -169,7 +177,8 @@ def register(mcp: FastMCP) -> None:
             str, Field(description="Token returned by vm_delete_request")
         ],
         vm_name: Annotated[
-            str, Field(description="Exact name of the VM as returned by vm_delete_request")
+            str,
+            Field(description="Exact name of the VM as returned by vm_delete_request"),
         ],
     ) -> str:
         def _do() -> str:

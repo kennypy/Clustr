@@ -27,13 +27,15 @@ Anthropic directory requirement:
     - Host /.well-known/oauth-protected-resource on your MCP domain
     - Provide test credentials to Anthropic reviewers
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 from fastapi import Request, status
 from fastapi.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +48,10 @@ NextCallable = Callable[[Request], Awaitable[Response]]
 # ---------------------------------------------------------------------------
 # JWKS cache (populated lazily when OAuth is enabled)
 # ---------------------------------------------------------------------------
-_jwks_cache: dict | None = None
+_jwks_cache: dict[str, Any] | None = None
 
 
-async def _fetch_jwks(jwks_uri: str) -> dict:
+async def _fetch_jwks(jwks_uri: str) -> dict[str, Any]:
     """Fetch and cache the JWKS document from the OAuth provider."""
     global _jwks_cache
     if _jwks_cache is not None:
@@ -79,12 +81,10 @@ async def _discover_jwks_uri(issuer: str) -> str:
             data = resp.json()
             return str(data["jwks_uri"])
     except Exception as exc:
-        raise RuntimeError(
-            f"OIDC discovery failed for issuer {issuer}: {exc}"
-        ) from exc
+        raise RuntimeError(f"OIDC discovery failed for issuer {issuer}: {exc}") from exc
 
 
-async def _validate_token(token: str, settings_oauth: object) -> dict:
+async def _validate_token(token: str, settings_oauth: object) -> dict[str, Any]:
     """
     Validate a Bearer token and return its claims.
 
@@ -108,6 +108,7 @@ async def _validate_token(token: str, settings_oauth: object) -> dict:
 # Middleware
 # ---------------------------------------------------------------------------
 
+
 class OAuthMiddleware:
     """
     ASGI middleware that enforces OAuth Bearer token validation.
@@ -124,9 +125,10 @@ class OAuthMiddleware:
 
     EXCLUDED_PATHS = ("/.well-known/", "/health")
 
-    def __init__(self, app: object) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         self.app = app
         from clustr.config.settings import get_settings
+
         self._oauth_enabled = get_settings().oauth.enabled
         if self._oauth_enabled:
             logger.warning(
@@ -136,7 +138,7 @@ class OAuthMiddleware:
         else:
             logger.info("OAuth is disabled — pass-through mode active")
 
-    async def __call__(self, scope: dict, receive: object, send: object) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if not self._oauth_enabled:
             # Fast path: bypass all OAuth logic entirely
             await self.app(scope, receive, send)
@@ -159,22 +161,28 @@ class OAuthMiddleware:
 
         if not auth_header.startswith("Bearer "):
             from starlette.responses import JSONResponse
+
             response = JSONResponse(
-                {"error": "missing_token", "detail": "Authorization: Bearer <token> required"},
+                {
+                    "error": "missing_token",
+                    "detail": "Authorization: Bearer <token> required",
+                },
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 headers={"WWW-Authenticate": "Bearer"},
             )
             await response(scope, receive, send)
             return
 
-        token = auth_header[len("Bearer "):]
+        token = auth_header[len("Bearer ") :]
 
         try:
             from clustr.config.settings import get_settings
+
             await _validate_token(token, get_settings().oauth)
         except NotImplementedError as exc:
             # Stub not yet implemented — fail loudly so it can't silently pass
             from starlette.responses import JSONResponse
+
             response = JSONResponse(
                 {"error": "oauth_not_implemented", "detail": str(exc)},
                 status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -183,10 +191,11 @@ class OAuthMiddleware:
             return
         except Exception as exc:
             from starlette.responses import JSONResponse
+
             response = JSONResponse(
                 {"error": "invalid_token", "detail": str(exc)},
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                headers={"WWW-Authenticate": "Bearer error=\"invalid_token\""},
+                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
             )
             await response(scope, receive, send)
             return

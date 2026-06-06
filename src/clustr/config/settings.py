@@ -2,6 +2,7 @@
 Clustr configuration — loaded once at startup from environment / .env file.
 All other modules import `get_settings()` rather than reading env directly.
 """
+
 from functools import lru_cache
 from typing import Literal
 
@@ -80,9 +81,12 @@ class ServerSettings(BaseSettings):
 class Settings(BaseSettings):
     """Root settings — aggregates all sub-settings."""
 
-    proxmox: ProxmoxSettings = Field(default_factory=ProxmoxSettings)
-    oauth: OAuthSettings = Field(default_factory=OAuthSettings)
-    server: ServerSettings = Field(default_factory=ServerSettings)
+    # default_factory builds each sub-model from the environment / .env at
+    # runtime; mypy can't see the required fields are env-populated, so the
+    # zero-arg construction is flagged — safe to ignore here.
+    proxmox: ProxmoxSettings = Field(default_factory=ProxmoxSettings)  # type: ignore[arg-type]
+    oauth: OAuthSettings = Field(default_factory=OAuthSettings)  # type: ignore[arg-type]
+    server: ServerSettings = Field(default_factory=ServerSettings)  # type: ignore[arg-type]
 
     model_config = SettingsConfigDict(
         env_file=".env",

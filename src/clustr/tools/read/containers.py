@@ -3,6 +3,7 @@ Read-only tools for LXC container information.
 
 All tools: readOnlyHint = True, destructiveHint = False.
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,10 +22,14 @@ _READ_ONLY = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True
 )
 
+_Node = Annotated[str, Field(description="Node name where the container resides")]
+_CtId = Annotated[int, Field(ge=100, description="Container ID number")]
+
 
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _list_containers(node: str | None = None) -> list[dict[str, Any]]:
     if node:
@@ -118,6 +123,7 @@ def _list_container_snapshots(node: str, ctid: int) -> list[dict[str, Any]]:
 # Tool registration
 # ---------------------------------------------------------------------------
 
+
 def register(mcp: FastMCP) -> None:
     """Register all container read tools onto the given FastMCP instance."""
 
@@ -150,10 +156,15 @@ def register(mcp: FastMCP) -> None:
         annotations=_READ_ONLY,
     )
     def get_container(
-        node: Annotated[str, Field(description="Node name where the container resides")],
-        ctid: Annotated[int, Field(ge=100, description="Container ID number (e.g. 103)")],
+        node: _Node,
+        ctid: Annotated[
+            int, Field(ge=100, description="Container ID number (e.g. 103)")
+        ],
     ) -> str:
-        return safe("get_container", lambda: _format_container_detail(_get_container(node, ctid)))
+        return safe(
+            "get_container",
+            lambda: _format_container_detail(_get_container(node, ctid)),
+        )
 
     @mcp.tool(
         name="get_container_status",
@@ -165,8 +176,8 @@ def register(mcp: FastMCP) -> None:
         annotations=_READ_ONLY,
     )
     def get_container_status(
-        node: Annotated[str, Field(description="Node name where the container resides")],
-        ctid: Annotated[int, Field(ge=100, description="Container ID number")],
+        node: _Node,
+        ctid: _CtId,
     ) -> str:
         return safe(
             "get_container_status",
@@ -183,8 +194,8 @@ def register(mcp: FastMCP) -> None:
         annotations=_READ_ONLY,
     )
     def list_container_snapshots(
-        node: Annotated[str, Field(description="Node name where the container resides")],
-        ctid: Annotated[int, Field(ge=100, description="Container ID number")],
+        node: _Node,
+        ctid: _CtId,
     ) -> str:
         return safe(
             "list_container_snapshots",
@@ -195,6 +206,7 @@ def register(mcp: FastMCP) -> None:
 # ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
+
 
 def _format_container_list(containers: list[dict[str, Any]]) -> str:
     if not containers:
@@ -212,7 +224,9 @@ def _format_container_list(containers: list[dict[str, Any]]) -> str:
 
 
 def _format_container_detail(ct: dict[str, Any]) -> str:
-    net_lines = "\n".join(f"  - {n['interface']}: {n['config']}" for n in ct["networks"])
+    net_lines = "\n".join(
+        f"  - {n['interface']}: {n['config']}" for n in ct["networks"]
+    )
     mp_lines = "\n".join(f"  - {m['mount']}: {m['config']}" for m in ct["mounts"])
     return (
         f"## Container {ct['ctid']}: {ct['hostname']}\n\n"
@@ -237,7 +251,8 @@ def _format_container_status(s: dict[str, Any]) -> str:
         f"{icon} **State:** {s['status']}\n"
         f"**CPU:** {s['cpu_usage_pct']}%\n"
         f"**Memory:** {s['memory_used_mb']} / {s['memory_total_mb']} MB\n"
-        f"**Disk I/O:** ↑ {s['disk_write_mb']} MB written, ↓ {s['disk_read_mb']} MB read\n"
+        f"**Disk I/O:** ↑ {s['disk_write_mb']} MB written, "
+        f"↓ {s['disk_read_mb']} MB read\n"
         f"**Network:** ↑ {s['net_out_mb']} MB out, ↓ {s['net_in_mb']} MB in\n"
         f"**Uptime:** {s['uptime_hours']} hours\n"
     )

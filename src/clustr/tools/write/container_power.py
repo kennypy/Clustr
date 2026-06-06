@@ -9,10 +9,11 @@ Annotations:
   - stop:     destructiveHint = True   (force kill)
   - reboot:   destructiveHint = False  (graceful)
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -34,12 +35,16 @@ _CtId = Annotated[int, Field(ge=100, description="Container ID")]
 # Tool implementation
 # ---------------------------------------------------------------------------
 
+
 def _container_power_action(node: str, ctid: int, action: str) -> str:
     actions = {"start", "shutdown", "stop", "reboot"}
     if action not in actions:
         raise ProxmoxError(f"Unknown container power action: {action}")
-    return proxmox_post(
-        lambda: getattr(get_client().nodes(node).lxc(ctid).status, action).post()
+    return cast(
+        str,
+        proxmox_post(
+            lambda: getattr(get_client().nodes(node).lxc(ctid).status, action).post()
+        ),
     )
 
 
@@ -55,6 +60,7 @@ def _run(node: str, ctid: int, action: str) -> str:
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register all container power tools onto the given FastMCP instance."""

@@ -6,11 +6,12 @@ Annotations:
   - delete_container_snapshot:   destructiveHint = True
   - rollback_container_snapshot: destructiveHint = True
 """
+
 from __future__ import annotations
 
 import logging
 import re
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -34,30 +35,47 @@ _CtId = Annotated[int, Field(ge=100, description="Container ID")]
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _create_container_snapshot(
     node: str, ctid: int, snapname: str, description: str = ""
 ) -> str:
     params: dict[str, Any] = {"snapname": snapname}
     if description:
         params["description"] = description
-    return proxmox_post(lambda: get_client().nodes(node).lxc(ctid).snapshot.post(**params))
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client().nodes(node).lxc(ctid).snapshot.post(**params)
+        ),
+    )
 
 
 def _delete_container_snapshot(node: str, ctid: int, snapname: str) -> str:
-    return proxmox_post(
-        lambda: get_client().nodes(node).lxc(ctid).snapshot(snapname).delete()
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client().nodes(node).lxc(ctid).snapshot(snapname).delete()
+        ),
     )
 
 
 def _rollback_container_snapshot(node: str, ctid: int, snapname: str) -> str:
-    return proxmox_post(
-        lambda: get_client().nodes(node).lxc(ctid).snapshot(snapname).rollback.post()
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client()
+            .nodes(node)
+            .lxc(ctid)
+            .snapshot(snapname)
+            .rollback.post()
+        ),
     )
 
 
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register all container snapshot tools onto the given FastMCP instance."""
@@ -67,7 +85,8 @@ def register(mcp: FastMCP) -> None:
         title="Create Container Snapshot",
         description=(
             "Create a snapshot of an LXC container. "
-            "Snapshot names must be alphanumeric with hyphens/underscores, max 40 chars."
+            "Snapshot names must be alphanumeric with hyphens/underscores, "
+            "max 40 chars."
         ),
         annotations=_SAFE_WRITE,
     )
@@ -77,7 +96,10 @@ def register(mcp: FastMCP) -> None:
         snapname: Annotated[
             str,
             Field(
-                description="Snapshot name (alphanumeric, hyphens, underscores; max 40 chars)"
+                description=(
+                    "Snapshot name (alphanumeric, hyphens, underscores; "
+                    "max 40 chars)"
+                )
             ),
         ],
         description: Annotated[str, Field(description="Optional description")] = "",

@@ -8,6 +8,7 @@ network interfaces, nesting) are better handled via the Proxmox UI.
 destructiveHint = False: creating a container is additive.
 readOnlyHint = False: mutating operation.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Tool implementation
 # ---------------------------------------------------------------------------
+
 
 def _create_container(
     node: str,
@@ -67,7 +69,7 @@ def _create_container(
     if nameserver:
         params["nameserver"] = nameserver
 
-    task_id = proxmox_post(lambda: get_client().nodes(node).lxc.post(**params))
+    task_id: str = proxmox_post(lambda: get_client().nodes(node).lxc.post(**params))
 
     if start_after_create:
         try:
@@ -81,6 +83,7 @@ def _create_container(
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register the create_container tool onto the given FastMCP instance."""
@@ -98,7 +101,10 @@ def register(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
     )
     def create_container(
-        node: Annotated[str, Field(description="Node to create the container on (e.g. 'pve')")],
+        node: Annotated[
+            str,
+            Field(description="Node to create the container on (e.g. 'pve')"),
+        ],
         ctid: Annotated[
             int,
             Field(
@@ -108,7 +114,11 @@ def register(mcp: FastMCP) -> None:
             ),
         ],
         hostname: Annotated[
-            str, Field(description="Container hostname (alphanumeric and hyphens, max 63 chars)")
+            str,
+            Field(
+                description="Container hostname (alphanumeric and hyphens, "
+                "max 63 chars)"
+            ),
         ],
         ostemplate: Annotated[
             str,
@@ -124,12 +134,18 @@ def register(mcp: FastMCP) -> None:
                 "Use list_storage to find available pools."
             ),
         ],
-        disk_gb: Annotated[int, Field(ge=1, description="Root disk size in GB (default: 8)")] = 8,
+        disk_gb: Annotated[
+            int, Field(ge=1, description="Root disk size in GB (default: 8)")
+        ] = 8,
         cores: Annotated[
             int, Field(ge=1, le=128, description="Number of CPU cores (default: 1)")
         ] = 1,
-        memory_mb: Annotated[int, Field(ge=128, description="Memory in MB (default: 512)")] = 512,
-        swap_mb: Annotated[int, Field(ge=0, description="Swap in MB (default: 512)")] = 512,
+        memory_mb: Annotated[
+            int, Field(ge=128, description="Memory in MB (default: 512)")
+        ] = 512,
+        swap_mb: Annotated[
+            int, Field(ge=0, description="Swap in MB (default: 512)")
+        ] = 512,
         password: Annotated[
             str,
             Field(
@@ -140,20 +156,30 @@ def register(mcp: FastMCP) -> None:
         ssh_public_key: Annotated[
             str,
             Field(
-                description="SSH public key to inject into the container's authorized_keys."
+                description="SSH public key to inject into the container's "
+                "authorized_keys."
             ),
         ] = "",
         unprivileged: Annotated[
             bool,
-            Field(description="Create as unprivileged container (recommended, default: true)"),
+            Field(
+                description="Create as unprivileged container "
+                "(recommended, default: true)"
+            ),
         ] = True,
         onboot: Annotated[
             bool,
-            Field(description="Start container automatically on Proxmox boot (default: false)"),
+            Field(
+                description="Start container automatically on Proxmox boot "
+                "(default: false)"
+            ),
         ] = False,
         start_after_create: Annotated[
             bool,
-            Field(description="Start the container immediately after creation (default: false)"),
+            Field(
+                description="Start the container immediately after creation "
+                "(default: false)"
+            ),
         ] = False,
         nameserver: Annotated[
             str, Field(description="DNS nameserver IP (e.g. '1.1.1.1'). Optional.")
@@ -178,7 +204,8 @@ def register(mcp: FastMCP) -> None:
                 nameserver=nameserver.strip(),
             )
             return (
-                f"✅ Container **{hostname}** (ID: {ctid}) creation started on node **{node}**.\n"
+                f"✅ Container **{hostname}** (ID: {ctid}) creation started "
+                f"on node **{node}**.\n"
                 f"Task ID: `{task_id}`\n\n"
                 f"**Config:**\n"
                 f"- CPU: {cores} core(s)\n"

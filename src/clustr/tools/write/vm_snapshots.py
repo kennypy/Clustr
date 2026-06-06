@@ -6,11 +6,12 @@ Annotations:
   - delete_vm_snapshot:   destructiveHint = True
   - rollback_vm_snapshot: destructiveHint = True  (replaces current state)
 """
+
 from __future__ import annotations
 
 import logging
 import re
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -35,6 +36,7 @@ _VmId = Annotated[int, Field(ge=100, description="VM ID")]
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _create_vm_snapshot(
     node: str,
     vmid: int,
@@ -47,24 +49,40 @@ def _create_vm_snapshot(
         params["description"] = description
     if include_ram:
         params["vmstate"] = 1
-    return proxmox_post(lambda: get_client().nodes(node).qemu(vmid).snapshot.post(**params))
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client().nodes(node).qemu(vmid).snapshot.post(**params)
+        ),
+    )
 
 
 def _delete_vm_snapshot(node: str, vmid: int, snapname: str) -> str:
-    return proxmox_post(
-        lambda: get_client().nodes(node).qemu(vmid).snapshot(snapname).delete()
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client().nodes(node).qemu(vmid).snapshot(snapname).delete()
+        ),
     )
 
 
 def _rollback_vm_snapshot(node: str, vmid: int, snapname: str) -> str:
-    return proxmox_post(
-        lambda: get_client().nodes(node).qemu(vmid).snapshot(snapname).rollback.post()
+    return cast(
+        str,
+        proxmox_post(
+            lambda: get_client()
+            .nodes(node)
+            .qemu(vmid)
+            .snapshot(snapname)
+            .rollback.post()
+        ),
     )
 
 
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register all VM snapshot tools onto the given FastMCP instance."""
@@ -74,7 +92,8 @@ def register(mcp: FastMCP) -> None:
         title="Create VM Snapshot",
         description=(
             "Create a snapshot of a QEMU virtual machine. "
-            "Snapshot names must be alphanumeric with hyphens/underscores, max 40 chars. "
+            "Snapshot names must be alphanumeric with hyphens/underscores, "
+            "max 40 chars. "
             "Optionally include RAM state (VM must be running)."
         ),
         annotations=_SAFE_WRITE,
@@ -85,7 +104,10 @@ def register(mcp: FastMCP) -> None:
         snapname: Annotated[
             str,
             Field(
-                description="Snapshot name (alphanumeric, hyphens, underscores; max 40 chars)"
+                description=(
+                    "Snapshot name (alphanumeric, hyphens, underscores; "
+                    "max 40 chars)"
+                )
             ),
         ],
         description: Annotated[
@@ -94,7 +116,10 @@ def register(mcp: FastMCP) -> None:
         include_ram: Annotated[
             bool,
             Field(
-                description="Include RAM state in snapshot (VM must be running). Default false."
+                description=(
+                    "Include RAM state in snapshot (VM must be running). "
+                    "Default false."
+                )
             ),
         ] = False,
     ) -> str:
@@ -104,9 +129,12 @@ def register(mcp: FastMCP) -> None:
                     "Error: Snapshot name must be alphanumeric with "
                     "hyphens/underscores only, max 40 characters."
                 )
-            task_id = _create_vm_snapshot(node, vmid, snapname, description, include_ram)
+            task_id = _create_vm_snapshot(
+                node, vmid, snapname, description, include_ram
+            )
             return (
-                f"✅ Snapshot **{snapname}** creation started for VM {vmid} on {node}.\n"
+                f"✅ Snapshot **{snapname}** creation started for VM "
+                f"{vmid} on {node}.\n"
                 f"Task ID: `{task_id}`\n\n"
                 f"Use `list_vm_snapshots` to confirm when complete."
             )
@@ -130,7 +158,8 @@ def register(mcp: FastMCP) -> None:
         def _do() -> str:
             task_id = _delete_vm_snapshot(node, vmid, snapname)
             return (
-                f"✅ Snapshot **{snapname}** deletion started for VM {vmid} on {node}.\n"
+                f"✅ Snapshot **{snapname}** deletion started for VM "
+                f"{vmid} on {node}.\n"
                 f"Task ID: `{task_id}`"
             )
 
@@ -154,7 +183,8 @@ def register(mcp: FastMCP) -> None:
         def _do() -> str:
             task_id = _rollback_vm_snapshot(node, vmid, snapname)
             return (
-                f"✅ Rollback to snapshot **{snapname}** started for VM {vmid} on {node}.\n"
+                f"✅ Rollback to snapshot **{snapname}** started for VM "
+                f"{vmid} on {node}.\n"
                 f"Task ID: `{task_id}`\n\n"
                 f"⚠️ All changes after this snapshot was taken have been discarded."
             )

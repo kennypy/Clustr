@@ -53,6 +53,8 @@ target-version = ["py310"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
 [tool.mypy]
@@ -63,3 +65,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+filterwarnings = [
+    # Starlette's TestClient warns about httpx; not actionable on our side.
+    "ignore:Using `httpx`",
+]

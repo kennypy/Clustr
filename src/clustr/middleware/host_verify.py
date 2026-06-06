@@ -16,9 +16,12 @@ When to activate:
 
 For now: every request passes through without modification.
 """
+
 from __future__ import annotations
 
 import logging
+
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +34,10 @@ class HostVerifyMiddleware:
     Safe to leave wired in permanently — zero overhead when inactive.
     """
 
-    def __init__(self, app: object) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         self.app = app
         logger.debug("HostVerifyMiddleware loaded (pass-through mode)")
 
-    async def __call__(self, scope: dict, receive: object, send: object) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         # TODO: When licensing is implemented, validate HOST_BINDING_TOKEN here
         await self.app(scope, receive, send)

@@ -14,6 +14,7 @@ Connection handling:
     errors (auth, permission, 4xx/5xx) are NOT retried; retrying them would
     be pointless and, for mutations, unsafe.
 """
+
 from __future__ import annotations
 
 import logging
@@ -80,10 +81,13 @@ def _build_client() -> ProxmoxAPI:
         return client
     except ResourceException as exc:
         raise ProxmoxError(
-            f"Authentication failed: {exc}", status_code=getattr(exc, "status_code", None)
+            f"Authentication failed: {exc}",
+            status_code=getattr(exc, "status_code", None),
         ) from exc
     except Exception as exc:
-        raise ProxmoxError(f"Cannot reach Proxmox at {s.host}:{s.port} — {exc}") from exc
+        raise ProxmoxError(
+            f"Cannot reach Proxmox at {s.host}:{s.port} — {exc}"
+        ) from exc
 
 
 def get_client() -> ProxmoxAPI:
@@ -124,10 +128,13 @@ def _call(path_fn: Any, kwargs: dict[str, Any]) -> Any:
         return path_fn(**kwargs)
     except ResourceException as exc:
         # A real API response (auth/permission/4xx/5xx) — do not retry.
-        raise ProxmoxError(str(exc), status_code=getattr(exc, "status_code", None)) from exc
+        raise ProxmoxError(
+            str(exc), status_code=getattr(exc, "status_code", None)
+        ) from exc
     except _RECOVERABLE_ERRORS as exc:
         logger.warning(
-            "Proxmox connection error (%s); rebuilding connection and retrying once", exc
+            "Proxmox connection error (%s); rebuilding connection and retrying " "once",
+            exc,
         )
         reset_client()
         try:

@@ -11,10 +11,11 @@ Annotations:
   - reboot:   destructiveHint = False  (graceful restart)
   - reset:    destructiveHint = True   (hard reset, equivalent to power cycle)
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -36,13 +37,17 @@ _VmId = Annotated[int, Field(ge=100, description="VM ID")]
 # Tool implementation
 # ---------------------------------------------------------------------------
 
+
 def _vm_power_action(node: str, vmid: int, action: str) -> str:
     """Execute a power action on a VM and return a task ID."""
     actions = {"start", "shutdown", "stop", "reboot", "reset"}
     if action not in actions:
         raise ProxmoxError(f"Unknown power action: {action}")
-    return proxmox_post(
-        lambda: getattr(get_client().nodes(node).qemu(vmid).status, action).post()
+    return cast(
+        str,
+        proxmox_post(
+            lambda: getattr(get_client().nodes(node).qemu(vmid).status, action).post()
+        ),
     )
 
 
@@ -58,6 +63,7 @@ def _run(node: str, vmid: int, action: str) -> str:
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+
 
 def register(mcp: FastMCP) -> None:
     """Register all VM power tools onto the given FastMCP instance."""
