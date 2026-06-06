@@ -6,129 +6,19 @@ All tools: readOnlyHint = True, destructiveHint = False.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
-from clustr.proxmox.client import ProxmoxError, get_client
+from clustr.proxmox.client import get_client, proxmox_get
+from clustr.tools import safe
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Tool definitions
-# ---------------------------------------------------------------------------
-
-TOOL_LIST_VMS = Tool(
-    name="list_vms",
-    title="List Virtual Machines",
-    description=(
-        "List all QEMU virtual machines across all nodes, showing VM ID, "
-        "name, status, CPU, and memory. Optionally filter by node name."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Filter to a specific node name (optional). "
-                               "Omit to list VMs across all nodes.",
-            }
-        },
-        "required": [],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_VM = Tool(
-    name="get_vm",
-    title="Get VM Details",
-    description=(
-        "Get detailed configuration and runtime status for a specific "
-        "QEMU virtual machine by node name and VM ID."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name where the VM resides (e.g. 'pve')",
-            },
-            "vmid": {
-                "type": "integer",
-                "description": "VM ID number (e.g. 100)",
-                "minimum": 100,
-            },
-        },
-        "required": ["node", "vmid"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_VM_STATUS = Tool(
-    name="get_vm_status",
-    title="Get VM Status",
-    description=(
-        "Get current runtime status for a VM: power state, CPU usage, "
-        "memory usage, disk I/O, and network I/O."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name where the VM resides",
-            },
-            "vmid": {
-                "type": "integer",
-                "description": "VM ID number",
-                "minimum": 100,
-            },
-        },
-        "required": ["node", "vmid"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_LIST_VM_SNAPSHOTS = Tool(
-    name="list_vm_snapshots",
-    title="List VM Snapshots",
-    description=(
-        "List all snapshots for a QEMU virtual machine, including snapshot "
-        "name, creation time, and description."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name where the VM resides",
-            },
-            "vmid": {
-                "type": "integer",
-                "description": "VM ID number",
-                "minimum": 100,
-            },
-        },
-        "required": ["node", "vmid"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
+_READ_ONLY = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=True
 )
 
 
@@ -137,13 +27,12 @@ TOOL_LIST_VM_SNAPSHOTS = Tool(
 # ---------------------------------------------------------------------------
 
 def _list_vms(node: str | None = None) -> list[dict[str, Any]]:
-    client = get_client()
     if node:
-        raw = client.nodes(node).qemu.get()
+        raw = proxmox_get(lambda: get_client().nodes(node).qemu.get())
         for vm in raw:
             vm["node"] = node
     else:
-        resources = client.cluster.resources.get(type="vm")
+        resources = proxmox_get(lambda: get_client().cluster.resources.get(type="vm"))
         raw = [r for r in resources if r.get("type") == "qemu"]
         for vm in raw:
             # cluster resources use 'name' not 'vmid' in same field
@@ -166,8 +55,7 @@ def _list_vms(node: str | None = None) -> list[dict[str, Any]]:
 
 
 def _get_vm(node: str, vmid: int) -> dict[str, Any]:
-    client = get_client()
-    config = client.nodes(node).qemu(vmid).config.get()
+    config = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).config.get())
     return {
         "vmid": vmid,
         "node": node,
@@ -185,8 +73,7 @@ def _get_vm(node: str, vmid: int) -> dict[str, Any]:
 
 
 def _get_vm_status(node: str, vmid: int) -> dict[str, Any]:
-    client = get_client()
-    s = client.nodes(node).qemu(vmid).status.current.get()
+    s = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).status.current.get())
     return {
         "vmid": vmid,
         "node": node,
@@ -205,8 +92,7 @@ def _get_vm_status(node: str, vmid: int) -> dict[str, Any]:
 
 
 def _list_vm_snapshots(node: str, vmid: int) -> list[dict[str, Any]]:
-    client = get_client()
-    snaps = client.nodes(node).qemu(vmid).snapshot.get()
+    snaps = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).snapshot.get())
     return [
         {
             "name": s.get("name"),
@@ -221,67 +107,79 @@ def _list_vm_snapshots(node: str, vmid: int) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Handler dispatcher
+# Tool registration
 # ---------------------------------------------------------------------------
 
-async def handle(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    try:
-        if tool_name == "list_vms":
-            node = arguments.get("node", "").strip() or None
-            result = _list_vms(node)
-            text = _format_vm_list(result)
+def register(mcp: FastMCP) -> None:
+    """Register all VM read tools onto the given FastMCP instance."""
 
-        elif tool_name == "get_vm":
-            node, vmid = _require_node_vmid(arguments)
-            if isinstance(node, list):
-                return node  # validation error returned as TextContent list
-            result = _get_vm(node, vmid)
-            text = _format_vm_detail(result)
+    @mcp.tool(
+        name="list_vms",
+        title="List Virtual Machines",
+        description=(
+            "List all QEMU virtual machines across all nodes, showing VM ID, "
+            "name, status, CPU, and memory. Optionally filter by node name."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def list_vms(
+        node: Annotated[
+            str,
+            Field(
+                description="Filter to a specific node name (optional). "
+                "Omit to list VMs across all nodes."
+            ),
+        ] = "",
+    ) -> str:
+        return safe("list_vms", lambda: _format_vm_list(_list_vms(node.strip() or None)))
 
-        elif tool_name == "get_vm_status":
-            node, vmid = _require_node_vmid(arguments)
-            if isinstance(node, list):
-                return node
-            result = _get_vm_status(node, vmid)
-            text = _format_vm_status(result)
+    @mcp.tool(
+        name="get_vm",
+        title="Get VM Details",
+        description=(
+            "Get detailed configuration and runtime status for a specific "
+            "QEMU virtual machine by node name and VM ID."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_vm(
+        node: Annotated[str, Field(description="Node name where the VM resides (e.g. 'pve')")],
+        vmid: Annotated[int, Field(ge=100, description="VM ID number (e.g. 100)")],
+    ) -> str:
+        return safe("get_vm", lambda: _format_vm_detail(_get_vm(node, vmid)))
 
-        elif tool_name == "list_vm_snapshots":
-            node, vmid = _require_node_vmid(arguments)
-            if isinstance(node, list):
-                return node
-            result = _list_vm_snapshots(node, vmid)
-            text = _format_snapshots("VM", vmid, result)
+    @mcp.tool(
+        name="get_vm_status",
+        title="Get VM Status",
+        description=(
+            "Get current runtime status for a VM: power state, CPU usage, "
+            "memory usage, disk I/O, and network I/O."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_vm_status(
+        node: Annotated[str, Field(description="Node name where the VM resides")],
+        vmid: Annotated[int, Field(ge=100, description="VM ID number")],
+    ) -> str:
+        return safe("get_vm_status", lambda: _format_vm_status(_get_vm_status(node, vmid)))
 
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
-
-    except ProxmoxError as exc:
-        logger.error("Proxmox error in %s: %s", tool_name, exc)
-        return [TextContent(type="text", text=f"Proxmox error: {exc}")]
-
-    return [TextContent(type="text", text=text)]
-
-
-# ---------------------------------------------------------------------------
-# Validation helpers
-# ---------------------------------------------------------------------------
-
-def _require_node_vmid(
-    arguments: dict[str, Any],
-) -> tuple[str, int] | list[TextContent]:
-    node = arguments.get("node", "").strip()
-    vmid_raw = arguments.get("vmid")
-    if not node:
-        return [TextContent(type="text", text="Error: 'node' parameter is required.")]
-    if vmid_raw is None:
-        return [TextContent(type="text", text="Error: 'vmid' parameter is required.")]
-    try:
-        vmid = int(vmid_raw)
-    except (TypeError, ValueError):
-        return [TextContent(type="text", text="Error: 'vmid' must be an integer.")]
-    if vmid < 100:
-        return [TextContent(type="text", text="Error: 'vmid' must be >= 100.")]
-    return node, vmid
+    @mcp.tool(
+        name="list_vm_snapshots",
+        title="List VM Snapshots",
+        description=(
+            "List all snapshots for a QEMU virtual machine, including snapshot "
+            "name, creation time, and description."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def list_vm_snapshots(
+        node: Annotated[str, Field(description="Node name where the VM resides")],
+        vmid: Annotated[int, Field(ge=100, description="VM ID number")],
+    ) -> str:
+        return safe(
+            "list_vm_snapshots",
+            lambda: _format_snapshots("VM", vmid, _list_vm_snapshots(node, vmid)),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +237,6 @@ def _format_snapshots(kind: str, vmid: int, snaps: list[dict[str, Any]]) -> str:
         lines.append(
             f"📸 **{s['name']}**"
             + (f" — {s['description']}" if s["description"] else "")
-            + (f" (includes RAM state)" if s["vmstate"] else "")
+            + (" (includes RAM state)" if s["vmstate"] else "")
         )
     return "\n".join(lines)

@@ -6,70 +6,19 @@ All tools: readOnlyHint = True, destructiveHint = False.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
-from clustr.proxmox.client import ProxmoxError, get_client
+from clustr.proxmox.client import get_client, proxmox_get
+from clustr.tools import safe
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Tool definitions
-# ---------------------------------------------------------------------------
-
-TOOL_LIST_STORAGE = Tool(
-    name="list_storage",
-    title="List Storage Pools",
-    description=(
-        "List all storage pools configured in Proxmox, showing name, type, "
-        "total capacity, used space, and available space. "
-        "Optionally filter by node name."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Filter to a specific node (optional).",
-            }
-        },
-        "required": [],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_STORAGE = Tool(
-    name="get_storage",
-    title="Get Storage Details",
-    description=(
-        "Get detailed information for a specific storage pool on a node, "
-        "including content types, enabled status, and space breakdown."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name (e.g. 'pve')",
-            },
-            "storage": {
-                "type": "string",
-                "description": "Storage name (e.g. 'local-lvm', 'fast-media')",
-            },
-        },
-        "required": ["node", "storage"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
+_READ_ONLY = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=True
 )
 
 
@@ -78,14 +27,12 @@ TOOL_GET_STORAGE = Tool(
 # ---------------------------------------------------------------------------
 
 def _list_storage(node: str | None = None) -> list[dict[str, Any]]:
-    client = get_client()
     if node:
-        pools = client.nodes(node).storage.get()
+        pools = proxmox_get(lambda: get_client().nodes(node).storage.get())
         for p in pools:
             p["node"] = node
     else:
-        resources = client.cluster.resources.get(type="storage")
-        pools = resources
+        pools = proxmox_get(lambda: get_client().cluster.resources.get(type="storage"))
 
     return [
         {
@@ -107,8 +54,7 @@ def _list_storage(node: str | None = None) -> list[dict[str, Any]]:
 
 
 def _get_storage(node: str, storage: str) -> dict[str, Any]:
-    client = get_client()
-    info = client.nodes(node).storage(storage).status.get()
+    info = proxmox_get(lambda: get_client().nodes(node).storage(storage).status.get())
     return {
         "name": storage,
         "node": node,
@@ -123,34 +69,48 @@ def _get_storage(node: str, storage: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Handler dispatcher
+# Tool registration
 # ---------------------------------------------------------------------------
 
-async def handle(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    try:
-        if tool_name == "list_storage":
-            node = arguments.get("node", "").strip() or None
-            result = _list_storage(node)
-            text = _format_storage_list(result)
+def register(mcp: FastMCP) -> None:
+    """Register all storage read tools onto the given FastMCP instance."""
 
-        elif tool_name == "get_storage":
-            node = arguments.get("node", "").strip()
-            storage = arguments.get("storage", "").strip()
-            if not node:
-                return [TextContent(type="text", text="Error: 'node' parameter is required.")]
-            if not storage:
-                return [TextContent(type="text", text="Error: 'storage' parameter is required.")]
-            result = _get_storage(node, storage)
-            text = _format_storage_detail(result)
+    @mcp.tool(
+        name="list_storage",
+        title="List Storage Pools",
+        description=(
+            "List all storage pools configured in Proxmox, showing name, type, "
+            "total capacity, used space, and available space. "
+            "Optionally filter by node name."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def list_storage(
+        node: Annotated[
+            str, Field(description="Filter to a specific node (optional).")
+        ] = "",
+    ) -> str:
+        return safe(
+            "list_storage",
+            lambda: _format_storage_list(_list_storage(node.strip() or None)),
+        )
 
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
-
-    except ProxmoxError as exc:
-        logger.error("Proxmox error in %s: %s", tool_name, exc)
-        return [TextContent(type="text", text=f"Proxmox error: {exc}")]
-
-    return [TextContent(type="text", text=text)]
+    @mcp.tool(
+        name="get_storage",
+        title="Get Storage Details",
+        description=(
+            "Get detailed information for a specific storage pool on a node, "
+            "including content types, enabled status, and space breakdown."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_storage(
+        node: Annotated[str, Field(description="Node name (e.g. 'pve')")],
+        storage: Annotated[
+            str, Field(description="Storage name (e.g. 'local-lvm', 'fast-media')")
+        ],
+    ) -> str:
+        return safe("get_storage", lambda: _format_storage_detail(_get_storage(node, storage)))
 
 
 # ---------------------------------------------------------------------------

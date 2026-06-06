@@ -11,16 +11,21 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from typing import Any
+from typing import Annotated, Any
 
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
-from clustr.proxmox.client import ProxmoxError, get_client
+from clustr.proxmox.client import ProxmoxError, get_client, proxmox_get, proxmox_post
+from clustr.tools import safe
 
 logger = logging.getLogger(__name__)
 
 _TOKEN_TTL = 300
 _pending_deletes: dict[str, dict[str, Any]] = {}
+
+_DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 
 def _purge_expired() -> None:
@@ -31,81 +36,21 @@ def _purge_expired() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions
-# ---------------------------------------------------------------------------
-
-TOOL_CONTAINER_DELETE_REQUEST = Tool(
-    name="container_delete_request",
-    title="Request Container Deletion (Step 1 of 2)",
-    description=(
-        "Step 1 of 2: Request deletion of an LXC container. "
-        "Returns a confirmation token and the container hostname. "
-        "You MUST call container_delete_confirm with the token and exact "
-        "hostname to complete the deletion. Token expires in 5 minutes. "
-        "The container must be stopped before deletion."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {"type": "string", "description": "Node name where the container resides"},
-            "ctid": {"type": "integer", "description": "Container ID to delete", "minimum": 100},
-        },
-        "required": ["node", "ctid"],
-    },
-    annotations={
-        "readOnlyHint": False,
-        "destructiveHint": True,
-    },
-)
-
-TOOL_CONTAINER_DELETE_CONFIRM = Tool(
-    name="container_delete_confirm",
-    title="Confirm Container Deletion (Step 2 of 2)",
-    description=(
-        "Step 2 of 2: Permanently delete an LXC container. "
-        "Requires the confirmation_token from container_delete_request AND "
-        "the exact container hostname. "
-        "WARNING: This permanently destroys the container and all its local storage. "
-        "This action cannot be undone."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "confirmation_token": {
-                "type": "string",
-                "description": "Token returned by container_delete_request",
-            },
-            "container_hostname": {
-                "type": "string",
-                "description": "Exact hostname of the container as returned by container_delete_request",
-            },
-        },
-        "required": ["confirmation_token", "container_hostname"],
-    },
-    annotations={
-        "readOnlyHint": False,
-        "destructiveHint": True,
-    },
-)
-
-
-# ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
 
 def _request_container_delete(node: str, ctid: int) -> dict[str, Any]:
     _purge_expired()
-    client = get_client()
 
     try:
-        config = client.nodes(node).lxc(ctid).config.get()
+        config = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).config.get())
         hostname = config.get("hostname", f"ct-{ctid}")
     except Exception as exc:
         raise ProxmoxError(
             f"Container {ctid} not found on node '{node}': {exc}"
         ) from exc
 
-    status = client.nodes(node).lxc(ctid).status.current.get()
+    status = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).status.current.get())
     if status.get("status") == "running":
         raise ProxmoxError(
             f"Container {ctid} ({hostname}) is currently running. "
@@ -145,71 +90,82 @@ def _confirm_container_delete(confirmation_token: str, container_hostname: str) 
 
     del _pending_deletes[confirmation_token]
 
-    client = get_client()
-    task_id = client.nodes(node).lxc(ctid).delete(purge=1, destroy_unreferenced_disks=1)
-    return task_id
+    return proxmox_post(
+        lambda: get_client()
+        .nodes(node)
+        .lxc(ctid)
+        .delete(purge=1, destroy_unreferenced_disks=1)
+    )
 
 
 # ---------------------------------------------------------------------------
-# Handler dispatcher
+# Tool registration
 # ---------------------------------------------------------------------------
 
-async def handle(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    try:
-        if tool_name == "container_delete_request":
-            node = arguments.get("node", "").strip()
-            ctid_raw = arguments.get("ctid")
+def register(mcp: FastMCP) -> None:
+    """Register the two-step container deletion tools onto the given FastMCP instance."""
 
-            if not node:
-                return [TextContent(type="text", text="Error: 'node' parameter is required.")]
-            if ctid_raw is None:
-                return [TextContent(type="text", text="Error: 'ctid' parameter is required.")]
-            try:
-                ctid = int(ctid_raw)
-            except (TypeError, ValueError):
-                return [TextContent(type="text", text="Error: 'ctid' must be an integer.")]
-
+    @mcp.tool(
+        name="container_delete_request",
+        title="Request Container Deletion (Step 1 of 2)",
+        description=(
+            "Step 1 of 2: Request deletion of an LXC container. "
+            "Returns a confirmation token and the container hostname. "
+            "You MUST call container_delete_confirm with the token and exact "
+            "hostname to complete the deletion. Token expires in 5 minutes. "
+            "The container must be stopped before deletion."
+        ),
+        annotations=_DESTRUCTIVE,
+    )
+    def container_delete_request(
+        node: Annotated[str, Field(description="Node name where the container resides")],
+        ctid: Annotated[int, Field(ge=100, description="Container ID to delete")],
+    ) -> str:
+        def _do() -> str:
             result = _request_container_delete(node, ctid)
-            return [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"⚠️ **Container Deletion Request — Step 1 of 2**\n\n"
-                        f"Container **{result['hostname']}** (ID: {result['ctid']}) on node "
-                        f"**{result['node']}** is queued for deletion.\n\n"
-                        f"To permanently delete it, call `container_delete_confirm` with:\n"
-                        f"- `confirmation_token`: `{result['token']}`\n"
-                        f"- `container_hostname`: `{result['hostname']}`\n\n"
-                        f"⏰ Token expires in 5 minutes. This will permanently destroy the "
-                        f"container and all its local storage."
-                    ),
-                )
-            ]
+            return (
+                f"⚠️ **Container Deletion Request — Step 1 of 2**\n\n"
+                f"Container **{result['hostname']}** (ID: {result['ctid']}) on node "
+                f"**{result['node']}** is queued for deletion.\n\n"
+                f"To permanently delete it, call `container_delete_confirm` with:\n"
+                f"- `confirmation_token`: `{result['token']}`\n"
+                f"- `container_hostname`: `{result['hostname']}`\n\n"
+                f"⏰ Token expires in 5 minutes. This will permanently destroy the "
+                f"container and all its local storage."
+            )
 
-        elif tool_name == "container_delete_confirm":
-            confirmation_token = arguments.get("confirmation_token", "").strip()
-            container_hostname = arguments.get("container_hostname", "").strip()
+        return safe("container_delete_request", _do)
 
-            if not confirmation_token:
-                return [TextContent(type="text", text="Error: 'confirmation_token' is required.")]
-            if not container_hostname:
-                return [TextContent(type="text", text="Error: 'container_hostname' is required.")]
-
+    @mcp.tool(
+        name="container_delete_confirm",
+        title="Confirm Container Deletion (Step 2 of 2)",
+        description=(
+            "Step 2 of 2: Permanently delete an LXC container. "
+            "Requires the confirmation_token from container_delete_request AND "
+            "the exact container hostname. "
+            "WARNING: This permanently destroys the container and all its local storage. "
+            "This action cannot be undone."
+        ),
+        annotations=_DESTRUCTIVE,
+    )
+    def container_delete_confirm(
+        confirmation_token: Annotated[
+            str, Field(description="Token returned by container_delete_request")
+        ],
+        container_hostname: Annotated[
+            str,
+            Field(
+                description="Exact hostname of the container as returned by "
+                "container_delete_request"
+            ),
+        ],
+    ) -> str:
+        def _do() -> str:
             task_id = _confirm_container_delete(confirmation_token, container_hostname)
-            return [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"💀 Container **{container_hostname}** deletion started.\n"
-                        f"Task ID: `{task_id}`\n\n"
-                        f"The container and all its local storage are being permanently destroyed."
-                    ),
-                )
-            ]
+            return (
+                f"💀 Container **{container_hostname}** deletion started.\n"
+                f"Task ID: `{task_id}`\n\n"
+                f"The container and all its local storage are being permanently destroyed."
+            )
 
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
-
-    except ProxmoxError as exc:
-        logger.error("Proxmox error in %s: %s", tool_name, exc)
-        return [TextContent(type="text", text=f"Proxmox error: {exc}")]
+        return safe("container_delete_confirm", _do)

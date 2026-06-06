@@ -3,7 +3,7 @@ Read-only tools for Proxmox node information.
 
 All tools in this module are registered with:
     readOnlyHint = True
-    destructiveHint = False (implicit)
+    destructiveHint = False
 
 These tools never mutate any state on the Proxmox cluster.
 """
@@ -12,106 +12,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from mcp.server import Server
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
-from clustr.proxmox.client import ProxmoxError, get_client
+from clustr.proxmox.client import get_client, proxmox_get
+from clustr.tools import safe
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Tool definitions
-# ---------------------------------------------------------------------------
-
-TOOL_LIST_NODES = Tool(
-    name="list_nodes",
-    title="List Nodes",
-    description=(
-        "List all nodes in the Proxmox cluster with their status, CPU, "
-        "memory usage, and uptime. Use this to get an overview of cluster "
-        "health before drilling into individual nodes or VMs."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {},
-        "required": [],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_NODE = Tool(
-    name="get_node",
-    title="Get Node Details",
-    description=(
-        "Get detailed status for a specific Proxmox node including CPU "
-        "usage, memory, disk, network interfaces, and running services. "
-        "Requires the node name (e.g. 'pve')."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name as shown in Proxmox UI (e.g. 'pve')",
-            }
-        },
-        "required": ["node"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_NODE_SERVICES = Tool(
-    name="get_node_services",
-    title="Get Node Services",
-    description=(
-        "List all system services on a Proxmox node with their running state. "
-        "Useful for checking if pve-cluster, corosync, or other critical "
-        "services are running."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name (e.g. 'pve')",
-            }
-        },
-        "required": ["node"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_CLUSTER_STATUS = Tool(
-    name="get_cluster_status",
-    title="Get Cluster Status",
-    description=(
-        "Get overall Proxmox cluster health: quorum status, node count, "
-        "HA state, and resource summary across all nodes. Good starting "
-        "point for any infrastructure check."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {},
-        "required": [],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
+_READ_ONLY = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=True
 )
 
 
@@ -120,8 +30,7 @@ TOOL_GET_CLUSTER_STATUS = Tool(
 # ---------------------------------------------------------------------------
 
 def _list_nodes() -> list[dict[str, Any]]:
-    client = get_client()
-    nodes = client.nodes.get()
+    nodes = proxmox_get(lambda: get_client().nodes.get())
     return [
         {
             "name": n.get("node"),
@@ -137,8 +46,7 @@ def _list_nodes() -> list[dict[str, Any]]:
 
 
 def _get_node(node: str) -> dict[str, Any]:
-    client = get_client()
-    status = client.nodes(node).status.get()
+    status = proxmox_get(lambda: get_client().nodes(node).status.get())
     return {
         "node": node,
         "cpu_usage_pct": round(status.get("cpu", 0) * 100, 1),
@@ -155,8 +63,7 @@ def _get_node(node: str) -> dict[str, Any]:
 
 
 def _get_node_services(node: str) -> list[dict[str, Any]]:
-    client = get_client()
-    services = client.nodes(node).services.get()
+    services = proxmox_get(lambda: get_client().nodes(node).services.get())
     return [
         {
             "name": s.get("name"),
@@ -169,9 +76,8 @@ def _get_node_services(node: str) -> list[dict[str, Any]]:
 
 
 def _get_cluster_status() -> dict[str, Any]:
-    client = get_client()
-    cluster = client.cluster.status.get()
-    resources = client.cluster.resources.get()
+    cluster = proxmox_get(lambda: get_client().cluster.status.get())
+    resources = proxmox_get(lambda: get_client().cluster.resources.get())
 
     nodes_online = sum(1 for item in cluster if item.get("type") == "node" and item.get("online"))
     nodes_total = sum(1 for item in cluster if item.get("type") == "node")
@@ -205,42 +111,66 @@ def _get_cluster_status() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Handler dispatcher
+# Tool registration
 # ---------------------------------------------------------------------------
 
-async def handle(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    """Route a tool call to the correct implementation."""
-    try:
-        if tool_name == "list_nodes":
-            result = _list_nodes()
-            text = _format_nodes(result)
+def register(mcp: FastMCP) -> None:
+    """Register all node read tools onto the given FastMCP instance."""
 
-        elif tool_name == "get_node":
-            node = arguments.get("node", "").strip()
-            if not node:
-                return [TextContent(type="text", text="Error: 'node' parameter is required.")]
-            result = _get_node(node)
-            text = _format_node_detail(result)
+    @mcp.tool(
+        name="list_nodes",
+        title="List Nodes",
+        description=(
+            "List all nodes in the Proxmox cluster with their status, CPU, "
+            "memory usage, and uptime. Use this to get an overview of cluster "
+            "health before drilling into individual nodes or VMs."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def list_nodes() -> str:
+        return safe("list_nodes", lambda: _format_nodes(_list_nodes()))
 
-        elif tool_name == "get_node_services":
-            node = arguments.get("node", "").strip()
-            if not node:
-                return [TextContent(type="text", text="Error: 'node' parameter is required.")]
-            result = _get_node_services(node)
-            text = _format_services(node, result)
+    @mcp.tool(
+        name="get_node",
+        title="Get Node Details",
+        description=(
+            "Get detailed status for a specific Proxmox node including CPU "
+            "usage, memory, disk, network interfaces, and running services. "
+            "Requires the node name (e.g. 'pve')."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_node(node: str) -> str:
+        return safe("get_node", lambda: _format_node_detail(_get_node(node)))
 
-        elif tool_name == "get_cluster_status":
-            result = _get_cluster_status()
-            text = _format_cluster(result)
+    @mcp.tool(
+        name="get_node_services",
+        title="Get Node Services",
+        description=(
+            "List all system services on a Proxmox node with their running state. "
+            "Useful for checking if pve-cluster, corosync, or other critical "
+            "services are running."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_node_services(node: str) -> str:
+        return safe(
+            "get_node_services",
+            lambda: _format_services(node, _get_node_services(node)),
+        )
 
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
-
-    except ProxmoxError as exc:
-        logger.error("Proxmox error in %s: %s", tool_name, exc)
-        return [TextContent(type="text", text=f"Proxmox error: {exc}")]
-
-    return [TextContent(type="text", text=text)]
+    @mcp.tool(
+        name="get_cluster_status",
+        title="Get Cluster Status",
+        description=(
+            "Get overall Proxmox cluster health: quorum status, node count, "
+            "HA state, and resource summary across all nodes. Good starting "
+            "point for any infrastructure check."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_cluster_status() -> str:
+        return safe("get_cluster_status", lambda: _format_cluster(_get_cluster_status()))
 
 
 # ---------------------------------------------------------------------------

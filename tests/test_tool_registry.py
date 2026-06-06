@@ -1,94 +1,98 @@
 """
-Tests for tool registry integrity.
+Tests for tool registry integrity (FastMCP).
 
-These tests verify that:
-  1. Every tool in _ALL_TOOLS has a title
-  2. Every tool has readOnlyHint or destructiveHint set
-  3. Every tool name is <= 64 characters
-  4. Every tool name in _ALL_TOOLS has a corresponding entry in _TOOL_HANDLERS
+These tests introspect the registered tools via ``mcp.list_tools()`` and verify:
+  1. Every tool has a title
+  2. Every tool name is <= 64 characters
+  3. Every tool has readOnlyHint or destructiveHint set explicitly
+  4. The full expected tool set is registered (no missing/extra/duplicate)
   5. Read tools all have readOnlyHint = True
-  6. Write tools (power stop/delete/rollback) have destructiveHint = True
+  6. Destructive tools (force stop/hard reset/delete/rollback) have destructiveHint = True
 """
 import pytest
 
+EXPECTED_TOOLS = {
+    # Read (14)
+    "list_nodes", "get_node", "get_node_services", "get_cluster_status",
+    "list_vms", "get_vm", "get_vm_status", "list_vm_snapshots",
+    "list_containers", "get_container", "get_container_status", "list_container_snapshots",
+    "list_storage", "get_storage",
+    # Write — power (9)
+    "start_vm", "shutdown_vm", "stop_vm", "reboot_vm", "reset_vm",
+    "start_container", "shutdown_container", "stop_container", "reboot_container",
+    # Write — snapshots (6)
+    "create_vm_snapshot", "delete_vm_snapshot", "rollback_vm_snapshot",
+    "create_container_snapshot", "delete_container_snapshot", "rollback_container_snapshot",
+    # Write — delete (4)
+    "vm_delete_request", "vm_delete_confirm",
+    "container_delete_request", "container_delete_confirm",
+    # Write — create (2)
+    "create_vm", "create_container",
+}
 
-def _get_annotation(tool, key, default=None):
-    if tool.annotations is None:
-        return default
-    if isinstance(tool.annotations, dict):
-        return tool.annotations.get(key, default)
-    return getattr(tool.annotations, key, default)
+READ_TOOL_NAMES = {
+    "list_nodes", "get_node", "get_node_services", "get_cluster_status",
+    "list_vms", "get_vm", "get_vm_status", "list_vm_snapshots",
+    "list_containers", "get_container", "get_container_status", "list_container_snapshots",
+    "list_storage", "get_storage",
+}
+
+DESTRUCTIVE_NAMES = {
+    "stop_vm", "reset_vm",
+    "stop_container",
+    "delete_vm_snapshot", "rollback_vm_snapshot",
+    "delete_container_snapshot", "rollback_container_snapshot",
+    "vm_delete_request", "vm_delete_confirm",
+    "container_delete_request", "container_delete_confirm",
+}
 
 
-def test_all_tools_have_title():
-    from clustr.server import _ALL_TOOLS
-    for tool in _ALL_TOOLS:
+async def _tools():
+    from clustr.server import mcp
+    return await mcp.list_tools()
+
+
+async def test_expected_tools_registered():
+    tools = await _tools()
+    names = [t.name for t in tools]
+    assert set(names) == EXPECTED_TOOLS, (
+        f"missing={EXPECTED_TOOLS - set(names)} extra={set(names) - EXPECTED_TOOLS}"
+    )
+    assert len(names) == len(set(names)), "duplicate tool names registered"
+    assert len(names) == 35
+
+
+async def test_all_tools_have_title():
+    for tool in await _tools():
         assert tool.title, f"Tool '{tool.name}' is missing a title"
 
 
-def test_all_tool_names_under_64_chars():
-    from clustr.server import _ALL_TOOLS
-    for tool in _ALL_TOOLS:
+async def test_all_tool_names_under_64_chars():
+    for tool in await _tools():
         assert len(tool.name) <= 64, (
             f"Tool name '{tool.name}' is {len(tool.name)} chars, max is 64"
         )
 
 
-def test_all_tools_have_annotations():
-    from clustr.server import _ALL_TOOLS
-    for tool in _ALL_TOOLS:
-        assert tool.annotations is not None, (
-            f"Tool '{tool.name}' has no annotations"
-        )
+async def test_all_tools_have_hint_set():
+    for tool in await _tools():
+        ann = tool.annotations
+        assert ann is not None, f"Tool '{tool.name}' has no annotations"
+        has_hint = (ann.readOnlyHint is not None) or (ann.destructiveHint is not None)
+        assert has_hint, f"Tool '{tool.name}' sets neither readOnlyHint nor destructiveHint"
 
 
-def test_all_tools_have_handler():
-    from clustr.server import _ALL_TOOLS, _TOOL_HANDLERS
-    for tool in _ALL_TOOLS:
-        assert tool.name in _TOOL_HANDLERS, (
-            f"Tool '{tool.name}' is in _ALL_TOOLS but has no entry in _TOOL_HANDLERS"
-        )
-
-
-def test_read_tools_are_readonly():
-    """All read tools must have readOnlyHint = True."""
-    from clustr.server import _ALL_TOOLS
-    read_tool_names = {
-        "list_nodes", "get_node", "get_node_services", "get_cluster_status",
-        "list_vms", "get_vm", "get_vm_status", "list_vm_snapshots",
-        "list_containers", "get_container", "get_container_status", "list_container_snapshots",
-        "list_storage", "get_storage",
-    }
-    tool_map = {t.name: t for t in _ALL_TOOLS}
-    for name in read_tool_names:
-        tool = tool_map[name]
-        assert _get_annotation(tool, "readOnlyHint") is True, (
+async def test_read_tools_are_readonly():
+    tool_map = {t.name: t for t in await _tools()}
+    for name in READ_TOOL_NAMES:
+        assert tool_map[name].annotations.readOnlyHint is True, (
             f"Read tool '{name}' must have readOnlyHint = True"
         )
 
 
-def test_destructive_tools_marked_correctly():
-    """Destructive tools must have destructiveHint = True."""
-    from clustr.server import _ALL_TOOLS
-    destructive_names = {
-        "stop_vm", "reset_vm",
-        "stop_container",
-        "delete_vm_snapshot", "rollback_vm_snapshot",
-        "delete_container_snapshot", "rollback_container_snapshot",
-        "vm_delete_request", "vm_delete_confirm",
-        "container_delete_request", "container_delete_confirm",
-    }
-    tool_map = {t.name: t for t in _ALL_TOOLS}
-    for name in destructive_names:
-        tool = tool_map[name]
-        assert _get_annotation(tool, "destructiveHint") is True, (
+async def test_destructive_tools_marked_correctly():
+    tool_map = {t.name: t for t in await _tools()}
+    for name in DESTRUCTIVE_NAMES:
+        assert tool_map[name].annotations.destructiveHint is True, (
             f"Tool '{name}' should have destructiveHint = True"
         )
-
-
-def test_no_duplicate_tool_names():
-    from clustr.server import _ALL_TOOLS
-    names = [t.name for t in _ALL_TOOLS]
-    assert len(names) == len(set(names)), (
-        f"Duplicate tool names found: {[n for n in names if names.count(n) > 1]}"
-    )

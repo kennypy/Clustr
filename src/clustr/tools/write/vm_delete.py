@@ -20,11 +20,14 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from typing import Any
+from typing import Annotated, Any
 
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
-from clustr.proxmox.client import ProxmoxError, get_client
+from clustr.proxmox.client import ProxmoxError, get_client, proxmox_get, proxmox_post
+from clustr.tools import safe
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _TOKEN_TTL = 300  # 5 minutes
 _pending_deletes: dict[str, dict[str, Any]] = {}
+
+_DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 
 def _purge_expired() -> None:
@@ -45,82 +50,22 @@ def _purge_expired() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions
-# ---------------------------------------------------------------------------
-
-TOOL_VM_DELETE_REQUEST = Tool(
-    name="vm_delete_request",
-    title="Request VM Deletion (Step 1 of 2)",
-    description=(
-        "Step 1 of 2: Request deletion of a QEMU virtual machine. "
-        "Returns a confirmation token and the VM name. "
-        "You MUST call vm_delete_confirm with the token and exact VM name "
-        "to complete the deletion. Token expires in 5 minutes. "
-        "The VM must be stopped before deletion."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {"type": "string", "description": "Node name where the VM resides"},
-            "vmid": {"type": "integer", "description": "VM ID to delete", "minimum": 100},
-        },
-        "required": ["node", "vmid"],
-    },
-    annotations={
-        "readOnlyHint": False,
-        "destructiveHint": True,
-    },
-)
-
-TOOL_VM_DELETE_CONFIRM = Tool(
-    name="vm_delete_confirm",
-    title="Confirm VM Deletion (Step 2 of 2)",
-    description=(
-        "Step 2 of 2: Permanently delete a QEMU virtual machine. "
-        "Requires the confirmation_token from vm_delete_request AND "
-        "the exact VM name to confirm intent. "
-        "WARNING: This permanently destroys the VM and all its local disks. "
-        "This action cannot be undone."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "confirmation_token": {
-                "type": "string",
-                "description": "Token returned by vm_delete_request",
-            },
-            "vm_name": {
-                "type": "string",
-                "description": "Exact name of the VM as returned by vm_delete_request",
-            },
-        },
-        "required": ["confirmation_token", "vm_name"],
-    },
-    annotations={
-        "readOnlyHint": False,
-        "destructiveHint": True,
-    },
-)
-
-
-# ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
 
 def _request_vm_delete(node: str, vmid: int) -> dict[str, Any]:
     """Look up the VM, register a delete token, return token + VM name."""
     _purge_expired()
-    client = get_client()
 
     # Verify VM exists and get its name before issuing token
     try:
-        config = client.nodes(node).qemu(vmid).config.get()
+        config = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).config.get())
         vm_name = config.get("name", f"vm-{vmid}")
     except Exception as exc:
         raise ProxmoxError(f"VM {vmid} not found on node '{node}': {exc}") from exc
 
     # Check VM is not running
-    status = client.nodes(node).qemu(vmid).status.current.get()
+    status = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).status.current.get())
     if status.get("status") == "running":
         raise ProxmoxError(
             f"VM {vmid} ({vm_name}) is currently running. "
@@ -161,71 +106,78 @@ def _confirm_vm_delete(confirmation_token: str, vm_name: str) -> str:
     # Consume the token — can only be used once
     del _pending_deletes[confirmation_token]
 
-    client = get_client()
-    task_id = client.nodes(node).qemu(vmid).delete(purge=1, destroy_unreferenced_disks=1)
-    return task_id
+    return proxmox_post(
+        lambda: get_client()
+        .nodes(node)
+        .qemu(vmid)
+        .delete(purge=1, destroy_unreferenced_disks=1)
+    )
 
 
 # ---------------------------------------------------------------------------
-# Handler dispatcher
+# Tool registration
 # ---------------------------------------------------------------------------
 
-async def handle(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    try:
-        if tool_name == "vm_delete_request":
-            node = arguments.get("node", "").strip()
-            vmid_raw = arguments.get("vmid")
+def register(mcp: FastMCP) -> None:
+    """Register the two-step VM deletion tools onto the given FastMCP instance."""
 
-            if not node:
-                return [TextContent(type="text", text="Error: 'node' parameter is required.")]
-            if vmid_raw is None:
-                return [TextContent(type="text", text="Error: 'vmid' parameter is required.")]
-            try:
-                vmid = int(vmid_raw)
-            except (TypeError, ValueError):
-                return [TextContent(type="text", text="Error: 'vmid' must be an integer.")]
-
+    @mcp.tool(
+        name="vm_delete_request",
+        title="Request VM Deletion (Step 1 of 2)",
+        description=(
+            "Step 1 of 2: Request deletion of a QEMU virtual machine. "
+            "Returns a confirmation token and the VM name. "
+            "You MUST call vm_delete_confirm with the token and exact VM name "
+            "to complete the deletion. Token expires in 5 minutes. "
+            "The VM must be stopped before deletion."
+        ),
+        annotations=_DESTRUCTIVE,
+    )
+    def vm_delete_request(
+        node: Annotated[str, Field(description="Node name where the VM resides")],
+        vmid: Annotated[int, Field(ge=100, description="VM ID to delete")],
+    ) -> str:
+        def _do() -> str:
             result = _request_vm_delete(node, vmid)
-            return [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"⚠️ **VM Deletion Request — Step 1 of 2**\n\n"
-                        f"VM **{result['vm_name']}** (ID: {result['vmid']}) on node **{result['node']}** "
-                        f"is queued for deletion.\n\n"
-                        f"To permanently delete it, call `vm_delete_confirm` with:\n"
-                        f"- `confirmation_token`: `{result['token']}`\n"
-                        f"- `vm_name`: `{result['vm_name']}`\n\n"
-                        f"⏰ Token expires in 5 minutes. This will permanently destroy the VM "
-                        f"and all its local disks."
-                    ),
-                )
-            ]
+            return (
+                f"⚠️ **VM Deletion Request — Step 1 of 2**\n\n"
+                f"VM **{result['vm_name']}** (ID: {result['vmid']}) on node "
+                f"**{result['node']}** is queued for deletion.\n\n"
+                f"To permanently delete it, call `vm_delete_confirm` with:\n"
+                f"- `confirmation_token`: `{result['token']}`\n"
+                f"- `vm_name`: `{result['vm_name']}`\n\n"
+                f"⏰ Token expires in 5 minutes. This will permanently destroy the VM "
+                f"and all its local disks."
+            )
 
-        elif tool_name == "vm_delete_confirm":
-            confirmation_token = arguments.get("confirmation_token", "").strip()
-            vm_name = arguments.get("vm_name", "").strip()
+        return safe("vm_delete_request", _do)
 
-            if not confirmation_token:
-                return [TextContent(type="text", text="Error: 'confirmation_token' is required.")]
-            if not vm_name:
-                return [TextContent(type="text", text="Error: 'vm_name' is required.")]
-
+    @mcp.tool(
+        name="vm_delete_confirm",
+        title="Confirm VM Deletion (Step 2 of 2)",
+        description=(
+            "Step 2 of 2: Permanently delete a QEMU virtual machine. "
+            "Requires the confirmation_token from vm_delete_request AND "
+            "the exact VM name to confirm intent. "
+            "WARNING: This permanently destroys the VM and all its local disks. "
+            "This action cannot be undone."
+        ),
+        annotations=_DESTRUCTIVE,
+    )
+    def vm_delete_confirm(
+        confirmation_token: Annotated[
+            str, Field(description="Token returned by vm_delete_request")
+        ],
+        vm_name: Annotated[
+            str, Field(description="Exact name of the VM as returned by vm_delete_request")
+        ],
+    ) -> str:
+        def _do() -> str:
             task_id = _confirm_vm_delete(confirmation_token, vm_name)
-            return [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"💀 VM **{vm_name}** deletion started.\n"
-                        f"Task ID: `{task_id}`\n\n"
-                        f"The VM and all its local disks are being permanently destroyed."
-                    ),
-                )
-            ]
+            return (
+                f"💀 VM **{vm_name}** deletion started.\n"
+                f"Task ID: `{task_id}`\n\n"
+                f"The VM and all its local disks are being permanently destroyed."
+            )
 
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
-
-    except ProxmoxError as exc:
-        logger.error("Proxmox error in %s: %s", tool_name, exc)
-        return [TextContent(type="text", text=f"Proxmox error: {exc}")]
+        return safe("vm_delete_confirm", _do)

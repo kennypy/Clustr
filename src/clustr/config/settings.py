@@ -19,7 +19,12 @@ class ProxmoxSettings(BaseSettings):
     token_value: str = Field(..., description="API token secret")
     verify_ssl: bool = Field(False, description="Verify TLS certificate")
 
-    model_config = SettingsConfigDict(env_prefix="PROXMOX_")
+    model_config = SettingsConfigDict(
+        env_prefix="PROXMOX_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class OAuthSettings(BaseSettings):
@@ -41,17 +46,35 @@ class OAuthSettings(BaseSettings):
         description="Override JWKS URI; auto-discovered from issuer if empty",
     )
 
-    model_config = SettingsConfigDict(env_prefix="OAUTH_")
+    model_config = SettingsConfigDict(
+        env_prefix="OAUTH_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class ServerSettings(BaseSettings):
     """HTTP server settings."""
 
-    host: str = Field("0.0.0.0")
+    host: str = Field("127.0.0.1")
     port: int = Field(8080, ge=1, le=65535)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field("INFO")
+    public_url: str = Field(
+        "",
+        description=(
+            "Public, canonical base URL of this MCP server (e.g. "
+            "https://clustr.example.com). Used in OAuth protected-resource "
+            "metadata. Leave empty in non-public deployments."
+        ),
+    )
 
-    model_config = SettingsConfigDict(env_prefix="MCP_")
+    model_config = SettingsConfigDict(
+        env_prefix="MCP_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class Settings(BaseSettings):

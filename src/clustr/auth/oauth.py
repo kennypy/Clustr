@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 from typing import Awaitable, Callable
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request, status
 from fastapi.responses import Response
 
 logger = logging.getLogger(__name__)

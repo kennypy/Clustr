@@ -206,14 +206,20 @@ mypy src/
 
 ## Architecture
 
+Clustr is built on **FastMCP** (the high-level MCP server API), which owns the
+Streamable HTTP transport and its session lifecycle — there is no hand-rolled
+transport code. Each tool module exposes a `register(mcp)` function; `server.py`
+constructs the FastMCP instance and registers them all.
+
 ```
 src/clustr/
-├── server.py              # Entry point, tool registration, transports
+├── server.py              # FastMCP instance, tool registration, transports, custom routes
 ├── config/
-│   └── settings.py        # Pydantic v2 settings
+│   └── settings.py        # Pydantic v2 settings (.env-aware)
 ├── proxmox/
-│   └── client.py          # proxmoxer wrapper, singleton connection
+│   └── client.py          # proxmoxer wrapper, lock-guarded singleton, retry helpers
 ├── tools/
+│   ├── __init__.py        # `safe()` — turns any tool failure into actionable text
 │   ├── read/              # readOnlyHint=true tools
 │   │   ├── nodes.py
 │   │   ├── vms.py
@@ -239,7 +245,10 @@ src/clustr/
 - Every tool has `title`, `readOnlyHint`, and `destructiveHint` annotations
 - All tool names ≤ 64 characters
 - Errors are always actionable text — no raw exceptions returned to callers
+- All Proxmox calls flow through `proxmox_get`/`proxmox_post`, which translate
+  errors and recover once from a dropped connection
 - OAuth middleware is a true no-op when disabled — zero overhead
+- DNS-rebinding protection on the HTTP transport; allow-list driven by `MCP_PUBLIC_URL`
 
 ---
 
@@ -254,4 +263,4 @@ MIT
 Pull requests welcome. Before submitting:
 1. `pytest` must pass
 2. `ruff check src/` must be clean
-3. New tools must follow the existing pattern: separate read/write module, annotations, handler function
+3. New tools must follow the existing pattern: separate read/write module, annotations, and a `register(mcp)` function

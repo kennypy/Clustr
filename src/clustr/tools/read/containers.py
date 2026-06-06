@@ -6,128 +6,19 @@ All tools: readOnlyHint = True, destructiveHint = False.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
-from clustr.proxmox.client import ProxmoxError, get_client
+from clustr.proxmox.client import get_client, proxmox_get
+from clustr.tools import safe
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Tool definitions
-# ---------------------------------------------------------------------------
-
-TOOL_LIST_CONTAINERS = Tool(
-    name="list_containers",
-    title="List Containers",
-    description=(
-        "List all LXC containers across all nodes, showing container ID, "
-        "name, status, CPU, and memory. Optionally filter by node name."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Filter to a specific node name (optional).",
-            }
-        },
-        "required": [],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_CONTAINER = Tool(
-    name="get_container",
-    title="Get Container Details",
-    description=(
-        "Get the full configuration for a specific LXC container: "
-        "CPU, memory, storage mounts, network interfaces, and startup settings."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name where the container resides",
-            },
-            "ctid": {
-                "type": "integer",
-                "description": "Container ID number (e.g. 103)",
-                "minimum": 100,
-            },
-        },
-        "required": ["node", "ctid"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_GET_CONTAINER_STATUS = Tool(
-    name="get_container_status",
-    title="Get Container Status",
-    description=(
-        "Get current runtime status for an LXC container: power state, "
-        "CPU usage, memory usage, disk I/O, and network I/O."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name where the container resides",
-            },
-            "ctid": {
-                "type": "integer",
-                "description": "Container ID number",
-                "minimum": 100,
-            },
-        },
-        "required": ["node", "ctid"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
-)
-
-TOOL_LIST_CONTAINER_SNAPSHOTS = Tool(
-    name="list_container_snapshots",
-    title="List Container Snapshots",
-    description=(
-        "List all snapshots for a specific LXC container, including "
-        "snapshot name, creation time, and description."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "node": {
-                "type": "string",
-                "description": "Node name where the container resides",
-            },
-            "ctid": {
-                "type": "integer",
-                "description": "Container ID number",
-                "minimum": 100,
-            },
-        },
-        "required": ["node", "ctid"],
-    },
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-    },
+_READ_ONLY = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=True
 )
 
 
@@ -136,13 +27,12 @@ TOOL_LIST_CONTAINER_SNAPSHOTS = Tool(
 # ---------------------------------------------------------------------------
 
 def _list_containers(node: str | None = None) -> list[dict[str, Any]]:
-    client = get_client()
     if node:
-        raw = client.nodes(node).lxc.get()
+        raw = proxmox_get(lambda: get_client().nodes(node).lxc.get())
         for ct in raw:
             ct["node"] = node
     else:
-        resources = client.cluster.resources.get(type="vm")
+        resources = proxmox_get(lambda: get_client().cluster.resources.get(type="vm"))
         raw = [r for r in resources if r.get("type") == "lxc"]
 
     return [
@@ -161,8 +51,7 @@ def _list_containers(node: str | None = None) -> list[dict[str, Any]]:
 
 
 def _get_container(node: str, ctid: int) -> dict[str, Any]:
-    client = get_client()
-    config = client.nodes(node).lxc(ctid).config.get()
+    config = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).config.get())
 
     # Extract network interfaces
     networks = []
@@ -195,8 +84,7 @@ def _get_container(node: str, ctid: int) -> dict[str, Any]:
 
 
 def _get_container_status(node: str, ctid: int) -> dict[str, Any]:
-    client = get_client()
-    s = client.nodes(node).lxc(ctid).status.current.get()
+    s = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).status.current.get())
     return {
         "ctid": ctid,
         "node": node,
@@ -214,8 +102,7 @@ def _get_container_status(node: str, ctid: int) -> dict[str, Any]:
 
 
 def _list_container_snapshots(node: str, ctid: int) -> list[dict[str, Any]]:
-    client = get_client()
-    snaps = client.nodes(node).lxc(ctid).snapshot.get()
+    snaps = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).snapshot.get())
     return [
         {
             "name": s.get("name"),
@@ -228,67 +115,81 @@ def _list_container_snapshots(node: str, ctid: int) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Handler dispatcher
+# Tool registration
 # ---------------------------------------------------------------------------
 
-async def handle(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    try:
-        if tool_name == "list_containers":
-            node = arguments.get("node", "").strip() or None
-            result = _list_containers(node)
-            text = _format_container_list(result)
+def register(mcp: FastMCP) -> None:
+    """Register all container read tools onto the given FastMCP instance."""
 
-        elif tool_name == "get_container":
-            node, ctid = _require_node_ctid(arguments)
-            if isinstance(node, list):
-                return node
-            result = _get_container(node, ctid)
-            text = _format_container_detail(result)
+    @mcp.tool(
+        name="list_containers",
+        title="List Containers",
+        description=(
+            "List all LXC containers across all nodes, showing container ID, "
+            "name, status, CPU, and memory. Optionally filter by node name."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def list_containers(
+        node: Annotated[
+            str, Field(description="Filter to a specific node name (optional).")
+        ] = "",
+    ) -> str:
+        return safe(
+            "list_containers",
+            lambda: _format_container_list(_list_containers(node.strip() or None)),
+        )
 
-        elif tool_name == "get_container_status":
-            node, ctid = _require_node_ctid(arguments)
-            if isinstance(node, list):
-                return node
-            result = _get_container_status(node, ctid)
-            text = _format_container_status(result)
+    @mcp.tool(
+        name="get_container",
+        title="Get Container Details",
+        description=(
+            "Get the full configuration for a specific LXC container: "
+            "CPU, memory, storage mounts, network interfaces, and startup settings."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_container(
+        node: Annotated[str, Field(description="Node name where the container resides")],
+        ctid: Annotated[int, Field(ge=100, description="Container ID number (e.g. 103)")],
+    ) -> str:
+        return safe("get_container", lambda: _format_container_detail(_get_container(node, ctid)))
 
-        elif tool_name == "list_container_snapshots":
-            node, ctid = _require_node_ctid(arguments)
-            if isinstance(node, list):
-                return node
-            result = _list_container_snapshots(node, ctid)
-            text = _format_snapshots(ctid, result)
+    @mcp.tool(
+        name="get_container_status",
+        title="Get Container Status",
+        description=(
+            "Get current runtime status for an LXC container: power state, "
+            "CPU usage, memory usage, disk I/O, and network I/O."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def get_container_status(
+        node: Annotated[str, Field(description="Node name where the container resides")],
+        ctid: Annotated[int, Field(ge=100, description="Container ID number")],
+    ) -> str:
+        return safe(
+            "get_container_status",
+            lambda: _format_container_status(_get_container_status(node, ctid)),
+        )
 
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
-
-    except ProxmoxError as exc:
-        logger.error("Proxmox error in %s: %s", tool_name, exc)
-        return [TextContent(type="text", text=f"Proxmox error: {exc}")]
-
-    return [TextContent(type="text", text=text)]
-
-
-# ---------------------------------------------------------------------------
-# Validation helpers
-# ---------------------------------------------------------------------------
-
-def _require_node_ctid(
-    arguments: dict[str, Any],
-) -> tuple[str, int] | list[TextContent]:
-    node = arguments.get("node", "").strip()
-    ctid_raw = arguments.get("ctid")
-    if not node:
-        return [TextContent(type="text", text="Error: 'node' parameter is required.")]
-    if ctid_raw is None:
-        return [TextContent(type="text", text="Error: 'ctid' parameter is required.")]
-    try:
-        ctid = int(ctid_raw)
-    except (TypeError, ValueError):
-        return [TextContent(type="text", text="Error: 'ctid' must be an integer.")]
-    if ctid < 100:
-        return [TextContent(type="text", text="Error: 'ctid' must be >= 100.")]
-    return node, ctid
+    @mcp.tool(
+        name="list_container_snapshots",
+        title="List Container Snapshots",
+        description=(
+            "List all snapshots for a specific LXC container, including "
+            "snapshot name, creation time, and description."
+        ),
+        annotations=_READ_ONLY,
+    )
+    def list_container_snapshots(
+        node: Annotated[str, Field(description="Node name where the container resides")],
+        ctid: Annotated[int, Field(ge=100, description="Container ID number")],
+    ) -> str:
+        return safe(
+            "list_container_snapshots",
+            lambda: _format_snapshots(ctid, _list_container_snapshots(node, ctid)),
+        )
 
 
 # ---------------------------------------------------------------------------

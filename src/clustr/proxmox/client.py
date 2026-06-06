@@ -5,15 +5,25 @@ Provides a single authenticated connection instance and a small set of
 helper methods used by the tool layer. All Proxmox API exceptions are
 caught here and re-raised as ``ProxmoxError`` so the tool layer never
 leaks raw proxmoxer internals to MCP callers.
+
+Connection handling:
+    The client is a lazily-built, lock-guarded singleton. If a call fails
+    with a transient connection error (dropped socket, stale keep-alive,
+    Proxmox restart), the helpers rebuild the connection once and retry —
+    so a dead connection recovers without a server restart. Genuine API
+    errors (auth, permission, 4xx/5xx) are NOT retried; retrying them would
+    be pointless and, for mutations, unsafe.
 """
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
+import threading
 from typing import Any
 
 from proxmoxer import ProxmoxAPI
 from proxmoxer.core import ResourceException
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import Timeout as RequestsTimeout
 
 from clustr.config.settings import get_settings
 
@@ -33,6 +43,22 @@ class ProxmoxError(Exception):
             "error": str(self),
             "status_code": str(self.status_code) if self.status_code else "unknown",
         }
+
+
+# ---------------------------------------------------------------------------
+# Lock-guarded singleton connection
+# ---------------------------------------------------------------------------
+_client: ProxmoxAPI | None = None
+_client_lock = threading.Lock()
+
+# Transient failures that mean "the request likely never completed" — safe to
+# rebuild the connection and retry once.
+_RECOVERABLE_ERRORS = (
+    RequestsConnectionError,
+    RequestsTimeout,
+    ConnectionError,
+    OSError,
+)
 
 
 def _build_client() -> ProxmoxAPI:
@@ -60,45 +86,69 @@ def _build_client() -> ProxmoxAPI:
         raise ProxmoxError(f"Cannot reach Proxmox at {s.host}:{s.port} — {exc}") from exc
 
 
-@lru_cache(maxsize=1)
 def get_client() -> ProxmoxAPI:
     """
-    Return the cached Proxmox API client.
+    Return the shared Proxmox API client, building it on first use.
 
-    Raises ``ProxmoxError`` on first call if the connection cannot be
-    established. Subsequent calls return the cached instance.
+    Raises ``ProxmoxError`` if the connection cannot be established.
+    Thread-safe: the connection is built at most once even under concurrency.
     """
-    return _build_client()
+    global _client
+    if _client is None:
+        with _client_lock:
+            if _client is None:
+                _client = _build_client()
+    return _client
 
 
-# ---------------------------------------------------------------------------
-# Convenience helpers used across multiple tool modules
-# ---------------------------------------------------------------------------
+def reset_client() -> None:
+    """Drop the cached connection so the next call rebuilds it."""
+    global _client
+    with _client_lock:
+        _client = None
 
-def proxmox_get(path_fn: Any, **kwargs: Any) -> Any:
+
+def _call(path_fn: Any, kwargs: dict[str, Any]) -> Any:
     """
-    Call a proxmoxer GET endpoint, translating exceptions to ProxmoxError.
+    Execute a proxmoxer call, translating exceptions to ``ProxmoxError`` and
+    recovering once from transient connection failures.
 
-    ``path_fn`` should be a callable that accepts no args and returns the
-    result of a proxmoxer ``.get()`` call, e.g.::
+    ``path_fn`` is a zero-arg callable that performs the proxmoxer call, e.g.::
 
         proxmox_get(lambda: get_client().nodes.get())
 
-    This pattern keeps callers readable while centralising error handling.
+    Because ``path_fn`` calls ``get_client()`` itself, the retry path picks up
+    a freshly rebuilt connection automatically.
     """
     try:
         return path_fn(**kwargs)
     except ResourceException as exc:
+        # A real API response (auth/permission/4xx/5xx) — do not retry.
         raise ProxmoxError(str(exc), status_code=getattr(exc, "status_code", None)) from exc
+    except _RECOVERABLE_ERRORS as exc:
+        logger.warning(
+            "Proxmox connection error (%s); rebuilding connection and retrying once", exc
+        )
+        reset_client()
+        try:
+            return path_fn(**kwargs)
+        except ResourceException as exc2:
+            raise ProxmoxError(
+                str(exc2), status_code=getattr(exc2, "status_code", None)
+            ) from exc2
+        except Exception as exc2:
+            raise ProxmoxError(f"Proxmox unreachable after reconnect: {exc2}") from exc2
+    except ProxmoxError:
+        raise
     except Exception as exc:
         raise ProxmoxError(f"Proxmox API error: {exc}") from exc
+
+
+def proxmox_get(path_fn: Any, **kwargs: Any) -> Any:
+    """Call a proxmoxer GET endpoint, translating exceptions to ProxmoxError."""
+    return _call(path_fn, kwargs)
 
 
 def proxmox_post(path_fn: Any, **kwargs: Any) -> Any:
     """Call a proxmoxer POST/mutating endpoint, translating exceptions."""
-    try:
-        return path_fn(**kwargs)
-    except ResourceException as exc:
-        raise ProxmoxError(str(exc), status_code=getattr(exc, "status_code", None)) from exc
-    except Exception as exc:
-        raise ProxmoxError(f"Proxmox API error: {exc}") from exc
+    return _call(path_fn, kwargs)
