@@ -45,6 +45,7 @@ def _create_container(
     onboot: bool = False,
     start_after_create: bool = False,
     nameserver: str = "",
+    bridge: str = "vmbr0",
 ) -> str:
     params: dict[str, Any] = {
         "vmid": ctid,
@@ -57,7 +58,7 @@ def _create_container(
         "swap": swap_mb,
         "unprivileged": 1 if unprivileged else 0,
         "onboot": 1 if onboot else 0,
-        "net0": "name=eth0,bridge=vmbr0,ip=dhcp",
+        "net0": f"name=eth0,bridge={bridge},ip=dhcp",
     }
 
     if password:
@@ -184,8 +185,40 @@ def register(mcp: FastMCP) -> None:
         nameserver: Annotated[
             str, Field(description="DNS nameserver IP (e.g. '1.1.1.1'). Optional.")
         ] = "",
+        bridge: Annotated[
+            str,
+            Field(description="Network bridge for eth0 (default: vmbr0)"),
+        ] = "vmbr0",
+        confirm: Annotated[
+            bool,
+            Field(
+                description="Must be true to actually create the container. When "
+                "false (default), returns the exact config that WOULD be created "
+                "for review — then call again with confirm=true."
+            ),
+        ] = False,
     ) -> str:
         def _do() -> str:
+            config = (
+                f"**Config:**\n"
+                f"- Node: `{node}`\n"
+                f"- Container ID: `{ctid}`  Hostname: `{hostname}`\n"
+                f"- CPU: {cores} core(s)\n"
+                f"- Memory: {memory_mb} MB\n"
+                f"- Swap: {swap_mb} MB\n"
+                f"- Root disk: {disk_gb} GB on `{storage}`\n"
+                f"- Template: `{ostemplate}`\n"
+                f"- Network: `eth0` on bridge `{bridge}` (dhcp)\n"
+                f"- Unprivileged: {'yes' if unprivileged else 'no'}\n"
+                f"- Start on boot: {'yes' if onboot else 'no'}\n"
+                f"- Start after create: {'yes' if start_after_create else 'no'}\n"
+            )
+            if not confirm:
+                return (
+                    f"🔎 **Review — container not yet created.**\n\n{config}\n"
+                    f"Call `create_container` again with the same arguments plus "
+                    f"`confirm=true` to create it."
+                )
             task_id = _create_container(
                 node=node,
                 ctid=ctid,
@@ -202,19 +235,13 @@ def register(mcp: FastMCP) -> None:
                 onboot=onboot,
                 start_after_create=start_after_create,
                 nameserver=nameserver.strip(),
+                bridge=bridge,
             )
             return (
                 f"✅ Container **{hostname}** (ID: {ctid}) creation started "
                 f"on node **{node}**.\n"
                 f"Task ID: `{task_id}`\n\n"
-                f"**Config:**\n"
-                f"- CPU: {cores} core(s)\n"
-                f"- Memory: {memory_mb} MB\n"
-                f"- Swap: {swap_mb} MB\n"
-                f"- Root disk: {disk_gb} GB on `{storage}`\n"
-                f"- Template: `{ostemplate}`\n"
-                f"- Unprivileged: {'yes' if unprivileged else 'no'}\n"
-                f"- Start on boot: {'yes' if onboot else 'no'}\n\n"
+                f"{config}\n"
                 f"Use `get_container_status` to check when the container is ready."
             )
 

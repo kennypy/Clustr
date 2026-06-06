@@ -112,17 +112,23 @@ def reset_client() -> None:
         _client = None
 
 
-def _call(path_fn: Any, kwargs: dict[str, Any]) -> Any:
+def _call(path_fn: Any, kwargs: dict[str, Any], *, retry: bool) -> Any:
     """
-    Execute a proxmoxer call, translating exceptions to ``ProxmoxError`` and
-    recovering once from transient connection failures.
+    Execute a proxmoxer call, translating exceptions to ``ProxmoxError``.
 
-    ``path_fn`` is a zero-arg callable that performs the proxmoxer call, e.g.::
+    On a transient connection failure the dead connection is always dropped so
+    the *next* call rebuilds it (seamless self-healing). Whether the failed call
+    is re-sent depends on ``retry``:
+
+      - reads  (``proxmox_get``, ``retry=True``)  → re-sent once, transparently.
+      - writes (``proxmox_post``, ``retry=False``) → NOT re-sent. Re-sending a
+        mutation whose response was merely lost could double-execute it
+        (e.g. create twice), so the write fails cleanly and the caller decides.
+
+    ``path_fn`` is a zero-arg callable that performs the proxmoxer call and calls
+    ``get_client()`` itself, so the retry path picks up the rebuilt connection::
 
         proxmox_get(lambda: get_client().nodes.get())
-
-    Because ``path_fn`` calls ``get_client()`` itself, the retry path picks up
-    a freshly rebuilt connection automatically.
     """
     try:
         return path_fn(**kwargs)
@@ -132,11 +138,17 @@ def _call(path_fn: Any, kwargs: dict[str, Any]) -> Any:
             str(exc), status_code=getattr(exc, "status_code", None)
         ) from exc
     except _RECOVERABLE_ERRORS as exc:
-        logger.warning(
-            "Proxmox connection error (%s); rebuilding connection and retrying " "once",
-            exc,
-        )
+        # Drop the dead connection so the next call rebuilds it.
         reset_client()
+        if not retry:
+            raise ProxmoxError(
+                f"Proxmox connection lost during a write (not retried to avoid "
+                f"double-execution): {exc}. The connection has been reset; "
+                f"retry the operation."
+            ) from exc
+        logger.warning(
+            "Proxmox connection error (%s); rebuilt connection, retrying once", exc
+        )
         try:
             return path_fn(**kwargs)
         except ResourceException as exc2:
@@ -152,10 +164,10 @@ def _call(path_fn: Any, kwargs: dict[str, Any]) -> Any:
 
 
 def proxmox_get(path_fn: Any, **kwargs: Any) -> Any:
-    """Call a proxmoxer GET endpoint, translating exceptions to ProxmoxError."""
-    return _call(path_fn, kwargs)
+    """Call a read endpoint; retried once on a transient connection failure."""
+    return _call(path_fn, kwargs, retry=True)
 
 
 def proxmox_post(path_fn: Any, **kwargs: Any) -> Any:
-    """Call a proxmoxer POST/mutating endpoint, translating exceptions."""
-    return _call(path_fn, kwargs)
+    """Call a mutating endpoint; never auto-retried (avoids double-execution)."""
+    return _call(path_fn, kwargs, retry=False)

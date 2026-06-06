@@ -57,3 +57,41 @@ async def test_tool_error_returns_actionable_text():
 
     assert "Proxmox error" in out
     assert "permission denied" in out
+
+
+_CREATE_ARGS = {
+    "node": "pve",
+    "vmid": 200,
+    "name": "test-vm",
+    "cores": 1,
+    "memory_mb": 512,
+    "disk_gb": 8,
+    "storage": "local-lvm",
+}
+
+
+async def test_create_vm_dry_run_does_not_touch_proxmox():
+    """Without confirm=true, create_vm previews the config and creates nothing."""
+    from clustr.server import mcp
+
+    with patch("clustr.tools.write.vm_create.get_client") as gc:
+        out = _text(await mcp.call_tool("create_vm", dict(_CREATE_ARGS)))
+
+    assert "not yet created" in out
+    assert "confirm=true" in out
+    gc.assert_not_called()  # no Proxmox call happened on a dry run
+
+
+async def test_create_vm_confirm_true_creates():
+    """With confirm=true, create_vm actually calls Proxmox and reports the task."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.nodes.return_value.qemu.post.return_value = "UPID:create-vm"
+    args = dict(_CREATE_ARGS, confirm=True, bridge="vmbr1")
+    with patch("clustr.tools.write.vm_create.get_client", return_value=fake):
+        out = _text(await mcp.call_tool("create_vm", args))
+
+    assert "creation started" in out
+    assert "UPID:create-vm" in out
+    assert "vmbr1" in out  # custom bridge flowed through

@@ -52,6 +52,7 @@ def _create_vm(
     storage: str,
     os_type: str = "l26",
     iso_path: str = "",
+    bridge: str = "vmbr0",
     onboot: bool = False,
     start_after_create: bool = False,
 ) -> str:
@@ -70,7 +71,7 @@ def _create_vm(
         # Boot order
         "boot": "order=scsi0",
         # Network
-        "net0": "virtio,bridge=vmbr0",
+        "net0": f"virtio,bridge={bridge}",
         # Display
         "vga": "std",
         # Tablet for pointer alignment in VNC
@@ -173,8 +174,39 @@ def register(mcp: FastMCP) -> None:
                 "(default: false)"
             ),
         ] = False,
+        bridge: Annotated[
+            str,
+            Field(description="Network bridge for the primary NIC (default: vmbr0)"),
+        ] = "vmbr0",
+        confirm: Annotated[
+            bool,
+            Field(
+                description="Must be true to actually create the VM. When false "
+                "(default), returns the exact config that WOULD be created so it "
+                "can be reviewed — then call again with confirm=true."
+            ),
+        ] = False,
     ) -> str:
         def _do() -> str:
+            config = (
+                f"**Config:**\n"
+                f"- Node: `{node}`\n"
+                f"- VM ID: `{vmid}`  Name: `{name}`\n"
+                f"- CPU: {cores} core(s)\n"
+                f"- Memory: {memory_mb} MB\n"
+                f"- Disk: {disk_gb} GB on `{storage}`\n"
+                f"- OS type: `{os_type}`\n"
+                f"- ISO: `{iso_path.strip() or 'none'}`\n"
+                f"- Network: `virtio` on bridge `{bridge}`\n"
+                f"- Start on boot: {'yes' if onboot else 'no'}\n"
+                f"- Start after create: {'yes' if start_after_create else 'no'}\n"
+            )
+            if not confirm:
+                return (
+                    f"🔎 **Review — VM not yet created.**\n\n{config}\n"
+                    f"Call `create_vm` again with the same arguments plus "
+                    f"`confirm=true` to create it."
+                )
             task_id = _create_vm(
                 node=node,
                 vmid=vmid,
@@ -185,19 +217,15 @@ def register(mcp: FastMCP) -> None:
                 storage=storage,
                 os_type=os_type,
                 iso_path=iso_path.strip(),
+                bridge=bridge,
                 onboot=onboot,
                 start_after_create=start_after_create,
             )
             return (
-                f"✅ VM **{name}** (ID: {vmid}) creation started on node **{node}**.\n"
+                f"✅ VM **{name}** (ID: {vmid}) creation started on node "
+                f"**{node}**.\n"
                 f"Task ID: `{task_id}`\n\n"
-                f"**Config:**\n"
-                f"- CPU: {cores} core(s)\n"
-                f"- Memory: {memory_mb} MB\n"
-                f"- Disk: {disk_gb} GB on `{storage}`\n"
-                f"- OS type: `{os_type}`\n"
-                f"- ISO: `{iso_path.strip() or 'none'}`\n"
-                f"- Start on boot: {'yes' if onboot else 'no'}\n\n"
+                f"{config}\n"
                 f"Use `get_vm_status` to check when the VM is ready."
             )
 
