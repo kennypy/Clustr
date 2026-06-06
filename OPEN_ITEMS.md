@@ -22,11 +22,6 @@ them.
 - [ ] **Rate limiting.** To be enforced at Cloudflare when/if released publicly
       (≈60 req/min/user, ≈10/min on destructive tools). No app-side code planned.
 
-## Smaller decisions awaiting an answer
-- [ ] **Lockfile enforcement.** `uv.lock` is committed but CI/Docker still use
-      `pip install` (lock is a reference, not enforced). Switch CI + Dockerfile
-      to `uv sync --frozen` to install from the lock? (Unanswered.)
-
 ## Noted, no action
 - Initial commit message says "38 tools" (actual: 35). Cosmetic; left as-is per
   decision.
@@ -40,3 +35,5 @@ them.
 - Confirm safeguard on destructive tools: two-step delete (VM/CT), dry-run
   `confirm` on create and on force-stop/hard-reset/snapshot delete/rollback.
 - Lint/type/format clean (ruff, black, mypy --strict); CI runs all four gates.
+- CI and Docker install from `uv.lock` (`uv sync --frozen`) — reproducible
+  builds; dependency drift now fails the build.
