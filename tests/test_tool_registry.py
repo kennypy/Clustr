@@ -11,7 +11,7 @@ These tests introspect the registered tools via ``mcp.list_tools()`` and verify:
 """
 
 EXPECTED_TOOLS = {
-    # Read (14)
+    # Read (15)
     "list_nodes",
     "get_node",
     "get_node_services",
@@ -26,6 +26,7 @@ EXPECTED_TOOLS = {
     "list_container_snapshots",
     "list_storage",
     "get_storage",
+    "check_proxmox_updates",
     # Write — power (9)
     "start_vm",
     "shutdown_vm",
@@ -68,6 +69,7 @@ READ_TOOL_NAMES = {
     "list_container_snapshots",
     "list_storage",
     "get_storage",
+    "check_proxmox_updates",
 }
 
 DESTRUCTIVE_NAMES = {
@@ -105,7 +107,7 @@ async def test_expected_tools_registered():
         set(names) == EXPECTED_TOOLS
     ), f"missing={EXPECTED_TOOLS - set(names)} extra={set(names) - EXPECTED_TOOLS}"
     assert len(names) == len(set(names)), "duplicate tool names registered"
-    assert len(names) == 35
+    assert len(names) == 36
 
 
 async def test_all_tools_have_title():

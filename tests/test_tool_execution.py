@@ -89,6 +89,53 @@ async def test_list_storage_by_node_reports_capacity():
     assert "40.0%" in out  # used percentage
 
 
+class _FakeResp:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        pass
+
+
+async def test_check_proxmox_updates_reports_upgrade():
+    """Running version behind the roadmap's latest → upgrade-available message."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "8.1.4", "release": "8.1"}
+    roadmap = "Proxmox VE 8.2 released. Proxmox VE 8.1. Proxmox VE 7.4."
+    with (
+        patch("clustr.tools.read.updates.get_client", return_value=fake),
+        patch("httpx.get", return_value=_FakeResp(roadmap)),
+    ):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "8.1.4" in out  # running version reported
+    assert "8.2" in out  # latest parsed from roadmap
+    assert "upgrade is available" in out.lower()
+
+
+async def test_check_proxmox_updates_degrades_when_offline():
+    """If the roadmap is unreachable, still report the running version cleanly."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "8.2.4", "release": "8.2"}
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("network blocked by policy")
+
+    with (
+        patch("clustr.tools.read.updates.get_client", return_value=fake),
+        patch("httpx.get", side_effect=boom),
+    ):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "8.2.4" in out  # running version still reported
+    assert "unavailable" in out.lower()  # graceful degradation, not an error
+    assert "network blocked by policy" in out
+
+
 async def test_tool_error_returns_actionable_text():
     """A Proxmox failure must surface as text, not raise."""
     from clustr.proxmox.client import ProxmoxError
