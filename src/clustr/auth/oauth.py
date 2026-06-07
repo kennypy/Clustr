@@ -31,18 +31,12 @@ Anthropic directory requirement:
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable
+from typing import Any
 
-from fastapi import Request, status
-from fastapi.responses import Response
+from starlette import status
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Types
-# ---------------------------------------------------------------------------
-NextCallable = Callable[[Request], Awaitable[Response]]
 
 
 # ---------------------------------------------------------------------------

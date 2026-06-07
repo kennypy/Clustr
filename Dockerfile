@@ -37,14 +37,16 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Proxmox config directory (mount your config.json here)
-RUN mkdir -p /app/proxmox-config
-
 # Non-root user
 RUN useradd --create-home --shell /bin/bash clustr
 USER clustr
 
-# Default environment (override via docker run -e or docker-compose env_file)
+# Default environment (override via docker run -e or docker-compose env_file).
+# MCP_HOST=0.0.0.0 binds all interfaces *inside the container* — required so a
+# published port can reach it. The container is the isolation boundary: do NOT
+# publish this port to a public/LAN address without auth in front. The provided
+# docker-compose.yml publishes to 127.0.0.1 only; put a reverse proxy / tunnel
+# in front for remote access.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     MCP_HOST=0.0.0.0 \

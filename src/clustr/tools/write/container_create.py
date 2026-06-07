@@ -18,7 +18,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from clustr.proxmox.client import get_client, proxmox_post
+from clustr.proxmox.client import ProxmoxError, get_client, proxmox_post
 from clustr.tools import safe
 
 logger = logging.getLogger(__name__)
@@ -74,8 +74,8 @@ def _create_container(
 
     if start_after_create:
         try:
-            get_client().nodes(node).lxc(ctid).status.start.post()
-        except Exception as exc:
+            proxmox_post(lambda: get_client().nodes(node).lxc(ctid).status.start.post())
+        except ProxmoxError as exc:
             logger.warning("Container created but failed to start: %s", exc)
 
     return task_id

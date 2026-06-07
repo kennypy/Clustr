@@ -262,10 +262,8 @@ src/clustr/
 │       ├── container_delete.py
 │       ├── vm_create.py
 │       └── container_create.py
-├── auth/
-│   └── oauth.py           # OAuth 2.1 middleware (disabled by default)
-└── middleware/
-    └── host_verify.py     # Host binding skeleton
+└── auth/
+    └── oauth.py           # OAuth 2.1 middleware (disabled by default)
 ```
 
 **Design principles:**

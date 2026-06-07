@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import threading
 import time
 from typing import Annotated, Any, cast
 
@@ -38,12 +39,18 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _TOKEN_TTL = 300  # 5 minutes
 _pending_deletes: dict[str, dict[str, Any]] = {}
+# Tools run in worker threads (anyio.to_thread), so the token store can be
+# touched concurrently. Guard every read/modify/write of _pending_deletes.
+_lock = threading.Lock()
 
+# Step 1 (request) destroys nothing — it only looks the VM up and mints a
+# short-lived token — so it is not flagged destructive. Step 2 (confirm) is.
+_REQUEST = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
 _DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 
 def _purge_expired() -> None:
-    """Remove expired tokens — called on every request to avoid leaks."""
+    """Remove expired tokens. Caller must hold ``_lock``."""
     now = time.monotonic()
     expired = [t for t, v in _pending_deletes.items() if v["expires"] < now]
     for t in expired:
@@ -57,8 +64,6 @@ def _purge_expired() -> None:
 
 def _request_vm_delete(node: str, vmid: int) -> dict[str, Any]:
     """Look up the VM, register a delete token, return token + VM name."""
-    _purge_expired()
-
     # Verify VM exists and get its name before issuing token
     try:
         config = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).config.get())
@@ -77,38 +82,43 @@ def _request_vm_delete(node: str, vmid: int) -> dict[str, Any]:
         )
 
     token = secrets.token_hex(16)
-    _pending_deletes[token] = {
-        "node": node,
-        "vmid": vmid,
-        "name": vm_name,
-        "expires": time.monotonic() + _TOKEN_TTL,
-    }
+    with _lock:
+        _purge_expired()
+        _pending_deletes[token] = {
+            "node": node,
+            "vmid": vmid,
+            "name": vm_name,
+            "expires": time.monotonic() + _TOKEN_TTL,
+        }
 
     return {"token": token, "vm_name": vm_name, "vmid": vmid, "node": node}
 
 
 def _confirm_vm_delete(confirmation_token: str, vm_name: str) -> str:
     """Validate token + name match, then execute deletion."""
-    _purge_expired()
+    # Atomically validate and consume the token so two concurrent confirms can't
+    # both pass before either deletes (the delete itself runs outside the lock).
+    with _lock:
+        _purge_expired()
 
-    pending = _pending_deletes.get(confirmation_token)
-    if pending is None:
-        raise ProxmoxError(
-            "Confirmation token not found or expired. "
-            "Call vm_delete_request again to get a fresh token."
-        )
+        pending = _pending_deletes.get(confirmation_token)
+        if pending is None:
+            raise ProxmoxError(
+                "Confirmation token not found or expired. "
+                "Call vm_delete_request again to get a fresh token."
+            )
 
-    if pending["name"] != vm_name:
-        raise ProxmoxError(
-            f"VM name mismatch. Expected '{pending['name']}', got '{vm_name}'. "
-            f"Provide the exact VM name returned by vm_delete_request."
-        )
+        if pending["name"] != vm_name:
+            raise ProxmoxError(
+                f"VM name mismatch. Expected '{pending['name']}', got '{vm_name}'. "
+                f"Provide the exact VM name returned by vm_delete_request."
+            )
+
+        # Consume the token — can only be used once
+        del _pending_deletes[confirmation_token]
 
     node = pending["node"]
     vmid = pending["vmid"]
-
-    # Consume the token — can only be used once
-    del _pending_deletes[confirmation_token]
 
     return cast(
         str,
@@ -139,7 +149,7 @@ def register(mcp: FastMCP) -> None:
             "to complete the deletion. Token expires in 5 minutes. "
             "The VM must be stopped before deletion."
         ),
-        annotations=_DESTRUCTIVE,
+        annotations=_REQUEST,
     )
     async def vm_delete_request(
         node: Annotated[str, Field(description="Node name where the VM resides")],
