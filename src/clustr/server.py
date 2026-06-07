@@ -55,6 +55,41 @@ logger = logging.getLogger(__name__)
 
 _OAUTH_META = "/.well-known/oauth-protected-resource"
 
+# Addresses that are not reachable off-box, so an unauthenticated server bound to
+# one cannot be controlled by anyone but the local host.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"})
+
+
+def _check_safe_bind(
+    host: str, *, oauth_enabled: bool, allow_unauthenticated: bool
+) -> None:
+    """
+    Refuse to start an unauthenticated server on a non-loopback address.
+
+    The only working auth mode today is "none" (OAuth is a stub), so binding off
+    loopback without authentication would put unauthenticated control of the
+    Proxmox cluster on the network. Loopback, enabled OAuth, or an explicit,
+    acknowledged override (``MCP_ALLOW_UNAUTHENTICATED=true`` — something else
+    enforces access control) are all allowed; anything else hard-fails.
+    """
+    if host in _LOOPBACK_HOSTS or oauth_enabled or allow_unauthenticated:
+        return
+    raise SystemExit(
+        f"Refusing to start: MCP_HOST={host} is not a loopback address and OAuth "
+        f"is disabled, so the /mcp endpoint would have NO authentication and be "
+        f"reachable off-box. Anyone who could reach this port could control your "
+        f"Proxmox cluster.\n"
+        f"Choose one:\n"
+        f"  - Bind loopback (unset MCP_HOST or set MCP_HOST=127.0.0.1) and put a "
+        f"reverse proxy / tunnel that authenticates in front; or\n"
+        f"  - Enable authentication (OAUTH_ENABLED=true with a configured "
+        f"provider); or\n"
+        f"  - If access control is genuinely enforced elsewhere (authenticating "
+        f"proxy, container/network isolation), set MCP_ALLOW_UNAUTHENTICATED=true "
+        f"to acknowledge and override."
+    )
+
+
 # Every module that contributes tools, read first then write.
 _TOOL_MODULES = (
     _read_nodes,
@@ -213,6 +248,15 @@ def _run_http() -> None:
     # scopes straight through, so startup still runs.
     asgi_app = OAuthMiddleware(mcp.streamable_http_app())
 
+    # Hard-fail an unauthenticated, off-box bind before opening the port — a
+    # warning is not enough when the exposure is "anyone on the network can
+    # delete your VMs".
+    _check_safe_bind(
+        settings.server.host,
+        oauth_enabled=settings.oauth.enabled,
+        allow_unauthenticated=settings.server.allow_unauthenticated,
+    )
+
     logger.info(
         "Clustr starting on %s:%s (OAuth: %s)",
         settings.server.host,
@@ -220,19 +264,17 @@ def _run_http() -> None:
         "enabled" if settings.oauth.enabled else "disabled",
     )
 
-    # Loud, actionable warnings for the two settings that most often turn a
-    # homelab convenience into an exposure: an unauthenticated endpoint reachable
-    # off-box, and a token sent over an unverified TLS connection.
-    if not settings.oauth.enabled and settings.server.host not in (
-        "127.0.0.1",
-        "localhost",
-        "::1",
+    # Loud reminders for the configurations that are permitted but still risky.
+    if (
+        settings.server.allow_unauthenticated
+        and not settings.oauth.enabled
+        and settings.server.host not in _LOOPBACK_HOSTS
     ):
         logger.warning(
-            "Binding to %s with OAuth disabled — the /mcp endpoint has NO "
-            "authentication and anyone who can reach this port can control your "
-            "cluster. Put a reverse proxy / firewall / Cloudflare Access in front "
-            "before exposing it.",
+            "Bound to %s with OAuth disabled and MCP_ALLOW_UNAUTHENTICATED set — "
+            "the /mcp endpoint has NO app-level authentication. This is only safe "
+            "if a proxy/tunnel or network isolation in front enforces access "
+            "control.",
             settings.server.host,
         )
     if not settings.proxmox.verify_ssl:

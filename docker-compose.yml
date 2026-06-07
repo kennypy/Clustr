@@ -14,6 +14,14 @@ services:
       - "127.0.0.1:${MCP_PORT:-8080}:${MCP_PORT:-8080}"
     env_file:
       - .env
+    environment:
+      # The image binds 0.0.0.0 *inside* the container, which would otherwise be
+      # refused (non-loopback + no auth). It is safe here ONLY because the port
+      # above is published to 127.0.0.1 on the host — the container network is the
+      # access-control boundary. This override acknowledges that. If you change
+      # the published address to a non-loopback host, put an authenticating proxy
+      # in front first. A bare `docker run` without this override is refused.
+      MCP_ALLOW_UNAUTHENTICATED: "true"
     healthcheck:
       test: ["CMD", "python", "-c",
              "import os, urllib.request; urllib.request.urlopen('http://localhost:%s/health' % os.environ.get('MCP_PORT', '8080'))"]
