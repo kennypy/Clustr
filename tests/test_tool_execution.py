@@ -45,6 +45,33 @@ async def test_list_nodes_executes_and_formats():
     assert "25.0%" in out
 
 
+async def test_list_storage_by_node_reports_capacity():
+    """
+    Regression: node-filtered list_storage must read the node endpoint's
+    total/used/avail fields, not the cluster endpoint's maxdisk/disk, or every
+    pool renders as 0 GB.
+    """
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.nodes.return_value.storage.get.return_value = [
+        {
+            "storage": "local-lvm",
+            "type": "lvmthin",
+            "total": 100 * 1024**3,
+            "used": 40 * 1024**3,
+            "avail": 60 * 1024**3,
+        }
+    ]
+    with patch("clustr.tools.read.storage.get_client", return_value=fake):
+        out = _text(await mcp.call_tool("list_storage", {"node": "pve"}))
+
+    assert "local-lvm" in out
+    assert "100.0" in out  # total GB — would be 0.0 with the old field names
+    assert "60.0" in out  # available GB
+    assert "40.0%" in out  # used percentage
+
+
 async def test_tool_error_returns_actionable_text():
     """A Proxmox failure must surface as text, not raise."""
     from clustr.proxmox.client import ProxmoxError
@@ -95,6 +122,29 @@ async def test_create_vm_confirm_true_creates():
     assert "creation started" in out
     assert "UPID:create-vm" in out
     assert "vmbr1" in out  # custom bridge flowed through
+
+
+async def test_create_vm_surfaces_failed_start():
+    """
+    Regression: start_after_create that fails must be reported to the caller,
+    not swallowed behind a "creation started" success message.
+    """
+    from clustr.proxmox.client import ProxmoxError
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.nodes.return_value.qemu.post.return_value = "UPID:create-vm"
+    fake.nodes.return_value.qemu.return_value.status.start.post.side_effect = (
+        ProxmoxError("disk still allocating")
+    )
+    args = dict(_CREATE_ARGS, confirm=True, start_after_create=True)
+    with patch("clustr.tools.write.vm_create.get_client", return_value=fake):
+        out = _text(await mcp.call_tool("create_vm", args))
+
+    assert "creation started" in out  # the VM was created
+    assert "start request failed" in out  # but the failed start is surfaced
+    assert "disk still allocating" in out
+    assert "start_vm" in out  # actionable next step
 
 
 async def test_destructive_tool_requires_confirm():

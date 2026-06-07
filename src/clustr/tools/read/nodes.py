@@ -135,9 +135,10 @@ def register(mcp: FastMCP) -> None:
         name="get_node",
         title="Get Node Details",
         description=(
-            "Get detailed status for a specific Proxmox node including CPU "
-            "usage, memory, disk, network interfaces, and running services. "
-            "Requires the node name (e.g. 'pve')."
+            "Get detailed status for a specific Proxmox node: CPU usage and "
+            "model, memory, root-disk usage, uptime, kernel version, and PVE "
+            "version. Requires the node name (e.g. 'pve'). Use "
+            "get_node_services for the service list."
         ),
         annotations=_READ_ONLY,
     )

@@ -28,6 +28,22 @@ _READ_ONLY = ToolAnnotations(
 # ---------------------------------------------------------------------------
 
 
+def _storage_capacity(p: dict[str, Any]) -> tuple[int, int, int]:
+    """
+    Return (total, used, avail) bytes, normalizing the two Proxmox endpoints.
+
+    ``/cluster/resources?type=storage`` reports ``maxdisk``/``disk`` (and no
+    explicit free figure); ``/nodes/{node}/storage`` reports
+    ``total``/``used``/``avail``. Read whichever set is present so the
+    node-filtered path doesn't silently render zeros.
+    """
+    total = int(p.get("maxdisk") or p.get("total") or 0)
+    used = int(p.get("disk") or p.get("used") or 0)
+    avail_raw = p.get("avail")
+    avail = int(avail_raw) if avail_raw is not None else max(total - used, 0)
+    return total, used, avail
+
+
 def _list_storage(node: str | None = None) -> list[dict[str, Any]]:
     if node:
         pools = proxmox_get(lambda: get_client().nodes(node).storage.get())
@@ -36,25 +52,22 @@ def _list_storage(node: str | None = None) -> list[dict[str, Any]]:
     else:
         pools = proxmox_get(lambda: get_client().cluster.resources.get(type="storage"))
 
-    return [
-        {
-            "name": p.get("storage") or p.get("id", "unknown"),
-            "node": p.get("node", node or "unknown"),
-            "type": p.get("type", "unknown"),
-            "status": p.get("status", "unknown"),
-            "total_gb": round(p.get("maxdisk", 0) / 1024**3, 2),
-            "used_gb": round(p.get("disk", 0) / 1024**3, 2),
-            "available_gb": round(
-                (p.get("maxdisk", 0) - p.get("disk", 0)) / 1024**3, 2
-            ),
-            "used_pct": (
-                round((p.get("disk", 0) / p.get("maxdisk", 1)) * 100, 1)
-                if p.get("maxdisk")
-                else 0
-            ),
-        }
-        for p in pools
-    ]
+    result = []
+    for p in pools:
+        total, used, avail = _storage_capacity(p)
+        result.append(
+            {
+                "name": p.get("storage") or p.get("id", "unknown"),
+                "node": p.get("node", node or "unknown"),
+                "type": p.get("type", "unknown"),
+                "status": p.get("status", "unknown"),
+                "total_gb": round(total / 1024**3, 2),
+                "used_gb": round(used / 1024**3, 2),
+                "available_gb": round(avail / 1024**3, 2),
+                "used_pct": round(used / total * 100, 1) if total else 0,
+            }
+        )
+    return result
 
 
 def _get_storage(node: str, storage: str) -> dict[str, Any]:

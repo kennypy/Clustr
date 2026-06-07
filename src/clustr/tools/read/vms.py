@@ -37,9 +37,11 @@ def _list_vms(node: str | None = None) -> list[dict[str, Any]]:
         resources = proxmox_get(lambda: get_client().cluster.resources.get(type="vm"))
         raw = [r for r in resources if r.get("type") == "qemu"]
         for vm in raw:
-            # cluster resources use 'name' not 'vmid' in same field
+            # cluster resources normally carry 'vmid'; fall back to the numeric
+            # tail of 'id' (e.g. "qemu/100") and keep it an int for consistent
+            # output/sorting with the per-node path.
             if "vmid" not in vm and "id" in vm:
-                vm["vmid"] = vm["id"].split("/")[-1]
+                vm["vmid"] = int(vm["id"].split("/")[-1])
 
     return [
         {
@@ -101,7 +103,6 @@ def _list_vm_snapshots(node: str, vmid: int) -> list[dict[str, Any]]:
             "description": s.get("description", ""),
             "created": s.get("snaptime", ""),
             "vmstate": bool(s.get("vmstate", 0)),
-            "is_current": s.get("name") == "current",
         }
         for s in snaps
         if s.get("name") != "current"

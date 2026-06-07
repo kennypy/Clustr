@@ -46,7 +46,7 @@ def _create_container(
     start_after_create: bool = False,
     nameserver: str = "",
     bridge: str = "vmbr0",
-) -> str:
+) -> tuple[str, str | None]:
     params: dict[str, Any] = {
         "vmid": ctid,
         "hostname": hostname,
@@ -72,13 +72,19 @@ def _create_container(
 
     task_id: str = proxmox_post(lambda: get_client().nodes(node).lxc.post(**params))
 
+    # ``None`` = start not requested; "ok" = start accepted; "failed: …" = the
+    # container exists but the start call errored. Surfaced to the caller so a
+    # failed start is never hidden behind a "creation started" success message.
+    start_status: str | None = None
     if start_after_create:
         try:
             proxmox_post(lambda: get_client().nodes(node).lxc(ctid).status.start.post())
+            start_status = "ok"
         except ProxmoxError as exc:
             logger.warning("Container created but failed to start: %s", exc)
+            start_status = f"failed: {exc}"
 
-    return task_id
+    return task_id, start_status
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +225,7 @@ def register(mcp: FastMCP) -> None:
                     f"Call `create_container` again with the same arguments plus "
                     f"`confirm=true` to create it."
                 )
-            task_id = _create_container(
+            task_id, start_status = _create_container(
                 node=node,
                 ctid=ctid,
                 hostname=hostname,
@@ -237,10 +243,22 @@ def register(mcp: FastMCP) -> None:
                 nameserver=nameserver.strip(),
                 bridge=bridge,
             )
+            if start_status == "ok":
+                start_line = "▶️ Start requested — the container is booting.\n"
+            elif start_status is not None:  # "failed: …"
+                detail = start_status[len("failed: ") :]
+                start_line = (
+                    f"⚠️ The container was created but the start request failed: "
+                    f"{detail}. Wait for provisioning to finish, then call "
+                    f"`start_container`.\n"
+                )
+            else:
+                start_line = ""
             return (
                 f"✅ Container **{hostname}** (ID: {ctid}) creation started "
                 f"on node **{node}**.\n"
-                f"Task ID: `{task_id}`\n\n"
+                f"Task ID: `{task_id}`\n"
+                f"{start_line}\n"
                 f"{config}\n"
                 f"Use `get_container_status` to check when the container is ready."
             )

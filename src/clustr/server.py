@@ -197,6 +197,28 @@ def _run_http() -> None:
         "enabled" if settings.oauth.enabled else "disabled",
     )
 
+    # Loud, actionable warnings for the two settings that most often turn a
+    # homelab convenience into an exposure: an unauthenticated endpoint reachable
+    # off-box, and a token sent over an unverified TLS connection.
+    if not settings.oauth.enabled and settings.server.host not in (
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    ):
+        logger.warning(
+            "Binding to %s with OAuth disabled — the /mcp endpoint has NO "
+            "authentication and anyone who can reach this port can control your "
+            "cluster. Put a reverse proxy / firewall / Cloudflare Access in front "
+            "before exposing it.",
+            settings.server.host,
+        )
+    if not settings.proxmox.verify_ssl:
+        logger.warning(
+            "PROXMOX_VERIFY_SSL is false — the Proxmox API token is sent over an "
+            "unverified TLS connection (MITM risk). Set PROXMOX_VERIFY_SSL=true "
+            "with a valid certificate for production use."
+        )
+
     uvicorn.run(
         asgi_app,
         host=settings.server.host,
