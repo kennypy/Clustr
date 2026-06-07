@@ -45,6 +45,23 @@ async def test_list_nodes_executes_and_formats():
     assert "25.0%" in out
 
 
+def test_agent_enabled_parsing():
+    """
+    Proxmox stores the qemu agent flag as a string ("1"/"0"/"enabled=1,..."),
+    so a plain bool() would treat "0" as enabled. Verify the leading flag drives
+    the result.
+    """
+    from clustr.tools.read.vms import _agent_enabled
+
+    assert _agent_enabled("1") is True
+    assert _agent_enabled("enabled=1,fstrim_cloned_disks=1") is True
+    assert _agent_enabled("0") is False
+    assert _agent_enabled("enabled=0") is False
+    assert _agent_enabled("") is False
+    assert _agent_enabled(0) is False
+    assert _agent_enabled(1) is True
+
+
 async def test_list_storage_by_node_reports_capacity():
     """
     Regression: node-filtered list_storage must read the node endpoint's

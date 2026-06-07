@@ -74,6 +74,71 @@ def test_vm_delete_token_consumed_on_use():
     _reset_vm_tokens()
 
 
+def test_vm_delete_uses_hyphenated_destroy_param():
+    """
+    Regression: Proxmox expects 'destroy-unreferenced-disks' (hyphen). proxmoxer
+    forwards kwargs verbatim, so an underscore name is sent as-is and rejected by
+    Proxmox's schema validator (HTTP 400) — the delete must use the hyphen form.
+    """
+    import clustr.tools.write.vm_delete as mod
+
+    _reset_vm_tokens()
+
+    import secrets
+
+    token = secrets.token_hex(16)
+    mod._pending_deletes[token] = {
+        "node": "pve",
+        "vmid": 100,
+        "name": "my-vm",
+        "expires": time.monotonic() + 300,
+    }
+
+    mock_client = MagicMock()
+    qemu = mock_client.nodes.return_value.qemu.return_value
+    qemu.delete.return_value = "UPID:task"
+
+    with patch("clustr.tools.write.vm_delete.get_client", return_value=mock_client):
+        mod._confirm_vm_delete(token, "my-vm")
+
+    _, kwargs = qemu.delete.call_args
+    assert kwargs.get("purge") == 1
+    assert kwargs.get("destroy-unreferenced-disks") == 1
+    assert "destroy_unreferenced_disks" not in kwargs
+    _reset_vm_tokens()
+
+
+def test_container_delete_uses_hyphenated_destroy_param():
+    """Same hyphenated-parameter guard for container deletion."""
+    import clustr.tools.write.container_delete as mod
+
+    _reset_ct_tokens()
+
+    import secrets
+
+    token = secrets.token_hex(16)
+    mod._pending_deletes[token] = {
+        "node": "pve",
+        "ctid": 103,
+        "hostname": "my-container",
+        "expires": time.monotonic() + 300,
+    }
+
+    mock_client = MagicMock()
+    lxc = mock_client.nodes.return_value.lxc.return_value
+    lxc.delete.return_value = "UPID:task"
+
+    with patch(
+        "clustr.tools.write.container_delete.get_client", return_value=mock_client
+    ):
+        mod._confirm_container_delete(token, "my-container")
+
+    _, kwargs = lxc.delete.call_args
+    assert kwargs.get("destroy-unreferenced-disks") == 1
+    assert "destroy_unreferenced_disks" not in kwargs
+    _reset_ct_tokens()
+
+
 def test_vm_delete_expired_token_rejected():
     """Expired tokens must be purged and rejected."""
     import clustr.tools.write.vm_delete as mod

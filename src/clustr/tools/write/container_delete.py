@@ -111,7 +111,9 @@ def _confirm_container_delete(confirmation_token: str, container_hostname: str) 
             lambda: get_client()
             .nodes(node)
             .lxc(ctid)
-            .delete(purge=1, destroy_unreferenced_disks=1)
+            # Hyphenated Proxmox API parameter — see vm_delete for the rationale.
+            # An underscore variant is rejected by Proxmox's schema validator.
+            .delete(purge=1, **{"destroy-unreferenced-disks": 1})
         ),
     )
 

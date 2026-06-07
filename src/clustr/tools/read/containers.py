@@ -77,7 +77,7 @@ def _get_container(node: str, ctid: int) -> dict[str, Any]:
         "cores": config.get("cores", 1),
         "memory_mb": config.get("memory", 0),
         "swap_mb": config.get("swap", 0),
-        "os_template": config.get("ostype", "unknown"),
+        "os_type": config.get("ostype", "unknown"),
         "rootfs": config.get("rootfs", ""),
         "onboot": bool(config.get("onboot", 0)),
         "unprivileged": bool(config.get("unprivileged", 0)),
@@ -231,6 +231,7 @@ def _format_container_detail(ct: dict[str, Any]) -> str:
     return (
         f"## Container {ct['ctid']}: {ct['hostname']}\n\n"
         f"**Node:** {ct['node']}\n"
+        f"**OS Type:** {ct['os_type']}\n"
         f"**CPU:** {ct['cores']} core(s)\n"
         f"**Memory:** {ct['memory_mb']} MB\n"
         f"**Swap:** {ct['swap_mb']} MB\n"
