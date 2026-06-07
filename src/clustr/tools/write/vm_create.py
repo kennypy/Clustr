@@ -55,7 +55,7 @@ def _create_vm(
     bridge: str = "vmbr0",
     onboot: bool = False,
     start_after_create: bool = False,
-) -> str:
+) -> tuple[str, str | None]:
     params: dict[str, Any] = {
         "vmid": vmid,
         "name": name,
@@ -85,15 +85,22 @@ def _create_vm(
 
     task_id: str = proxmox_post(lambda: get_client().nodes(node).qemu.post(**params))
 
+    # ``None`` = start not requested; "ok" = start accepted; "failed: …" = the
+    # VM exists but the start call errored (commonly because the create task is
+    # still allocating the disk). The outcome is surfaced to the caller so a
+    # failed start is never hidden behind a "creation started" success message.
+    start_status: str | None = None
     if start_after_create:
         try:
             proxmox_post(
                 lambda: get_client().nodes(node).qemu(vmid).status.start.post()
             )
+            start_status = "ok"
         except ProxmoxError as exc:
             logger.warning("VM created but failed to start: %s", exc)
+            start_status = f"failed: {exc}"
 
-    return task_id
+    return task_id, start_status
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +216,7 @@ def register(mcp: FastMCP) -> None:
                     f"Call `create_vm` again with the same arguments plus "
                     f"`confirm=true` to create it."
                 )
-            task_id = _create_vm(
+            task_id, start_status = _create_vm(
                 node=node,
                 vmid=vmid,
                 name=name,
@@ -223,10 +230,22 @@ def register(mcp: FastMCP) -> None:
                 onboot=onboot,
                 start_after_create=start_after_create,
             )
+            if start_status == "ok":
+                start_line = "▶️ Start requested — the VM is booting.\n"
+            elif start_status is not None:  # "failed: …"
+                detail = start_status[len("failed: ") :]
+                start_line = (
+                    f"⚠️ The VM was created but the start request failed: {detail}. "
+                    f"This usually means the disk is still being allocated — wait a "
+                    f"moment, then call `start_vm`.\n"
+                )
+            else:
+                start_line = ""
             return (
                 f"✅ VM **{name}** (ID: {vmid}) creation started on node "
                 f"**{node}**.\n"
-                f"Task ID: `{task_id}`\n\n"
+                f"Task ID: `{task_id}`\n"
+                f"{start_line}\n"
                 f"{config}\n"
                 f"Use `get_vm_status` to check when the VM is ready."
             )
