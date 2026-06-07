@@ -40,6 +40,7 @@ from clustr.config.settings import get_settings
 from clustr.tools.read import containers as _read_containers
 from clustr.tools.read import nodes as _read_nodes
 from clustr.tools.read import storage as _read_storage
+from clustr.tools.read import updates as _read_updates
 from clustr.tools.read import vms as _read_vms
 from clustr.tools.write import container_create as _write_container_create
 from clustr.tools.write import container_delete as _write_container_delete
@@ -60,6 +61,7 @@ _TOOL_MODULES = (
     _read_vms,
     _read_containers,
     _read_storage,
+    _read_updates,
     _write_vm_power,
     _write_container_power,
     _write_vm_snapshots,

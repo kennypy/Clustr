@@ -45,6 +45,23 @@ async def test_list_nodes_executes_and_formats():
     assert "25.0%" in out
 
 
+def test_agent_enabled_parsing():
+    """
+    Proxmox stores the qemu agent flag as a string ("1"/"0"/"enabled=1,..."),
+    so a plain bool() would treat "0" as enabled. Verify the leading flag drives
+    the result.
+    """
+    from clustr.tools.read.vms import _agent_enabled
+
+    assert _agent_enabled("1") is True
+    assert _agent_enabled("enabled=1,fstrim_cloned_disks=1") is True
+    assert _agent_enabled("0") is False
+    assert _agent_enabled("enabled=0") is False
+    assert _agent_enabled("") is False
+    assert _agent_enabled(0) is False
+    assert _agent_enabled(1) is True
+
+
 async def test_list_storage_by_node_reports_capacity():
     """
     Regression: node-filtered list_storage must read the node endpoint's
@@ -70,6 +87,115 @@ async def test_list_storage_by_node_reports_capacity():
     assert "100.0" in out  # total GB — would be 0.0 with the old field names
     assert "60.0" in out  # available GB
     assert "40.0%" in out  # used percentage
+
+
+class _FakeResp:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        pass
+
+
+# A realistic slice of a Debian Packages index: multiple packages, and two
+# pve-manager stanzas so the parser's "take the max version" path is exercised.
+_PACKAGES_FIXTURE = (
+    "Package: pve-kernel-6.8\n"
+    "Version: 6.8.4-2\n"
+    "\n"
+    "Package: pve-manager\n"
+    "Version: 8.2.4\n"
+    "\n"
+    "Package: qemu-server\n"
+    "Version: 8.2.1\n"
+    "\n"
+    "Package: pve-manager\n"
+    "Version: 8.2.7\n"
+)
+
+
+def test_parse_pve_manager_version_picks_max():
+    """The parser must select pve-manager (not lookalikes) and the max version."""
+    from clustr.tools.read.updates import _parse_pve_manager_version
+
+    assert _parse_pve_manager_version(_PACKAGES_FIXTURE) == "8.2.7"
+    assert _parse_pve_manager_version("Package: qemu-server\nVersion: 9.9.9\n") is None
+
+
+async def test_check_proxmox_updates_reports_upgrade():
+    """Running version behind the track's latest → update-available message."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "8.2.4", "release": "8.2"}
+    captured = {}
+
+    def fake_get(url, *args, **kwargs):
+        captured["url"] = url
+        return _FakeResp(_PACKAGES_FIXTURE)
+
+    with (
+        patch("clustr.tools.read.updates.get_client", return_value=fake),
+        patch("httpx.get", side_effect=fake_get),
+    ):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "8.2.4" in out  # running version reported
+    assert "8.2.7" in out  # latest from the package index
+    assert "update is available" in out.lower()
+    # Track-aware: major 8 must resolve to the bookworm repo.
+    assert "bookworm" in captured["url"]
+
+
+async def test_check_proxmox_updates_up_to_date():
+    """Running == latest on the track → 'latest release' message, no upgrade."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "8.2.7", "release": "8.2"}
+    with (
+        patch("clustr.tools.read.updates.get_client", return_value=fake),
+        patch("httpx.get", return_value=_FakeResp(_PACKAGES_FIXTURE)),
+    ):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "latest release for this track" in out.lower()
+    assert "update is available" not in out.lower()
+
+
+async def test_check_proxmox_updates_unknown_track_degrades():
+    """A future major with no codename mapping degrades, still reporting running."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "11.0.1", "release": "11.0"}
+    with patch("clustr.tools.read.updates.get_client", return_value=fake):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "11.0.1" in out
+    assert "unavailable" in out.lower()
+    assert "unrecognized" in out.lower()
+
+
+async def test_check_proxmox_updates_degrades_when_offline():
+    """If the package index is unreachable, still report the running version."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "8.2.4", "release": "8.2"}
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("network blocked by policy")
+
+    with (
+        patch("clustr.tools.read.updates.get_client", return_value=fake),
+        patch("httpx.get", side_effect=boom),
+    ):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "8.2.4" in out  # running version still reported
+    assert "unavailable" in out.lower()  # graceful degradation, not an error
+    assert "network blocked by policy" in out
 
 
 async def test_tool_error_returns_actionable_text():

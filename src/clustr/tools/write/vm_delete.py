@@ -126,7 +126,11 @@ def _confirm_vm_delete(confirmation_token: str, vm_name: str) -> str:
             lambda: get_client()
             .nodes(node)
             .qemu(vmid)
-            .delete(purge=1, destroy_unreferenced_disks=1)
+            # Proxmox's API parameter is hyphenated; proxmoxer passes kwargs
+            # through verbatim, and a Python identifier can't contain a hyphen,
+            # so it must be supplied via dict-unpacking. An underscore variant is
+            # rejected by Proxmox's schema validator (HTTP 400).
+            .delete(purge=1, **{"destroy-unreferenced-disks": 1})
         ),
     )
 

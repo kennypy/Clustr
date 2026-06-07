@@ -58,6 +58,24 @@ def _list_vms(node: str | None = None) -> list[dict[str, Any]]:
     ]
 
 
+def _agent_enabled(agent: Any) -> bool:
+    """
+    Interpret the qemu ``agent`` config value.
+
+    Proxmox returns it as a string in the form ``"1"``, ``"0"``, or
+    ``"enabled=1,fstrim_cloned_disks=1"`` — so a plain ``bool()`` is wrong
+    (``bool("0")`` is truthy). Treat it as enabled only when the leading flag
+    is 1.
+    """
+    text = str(agent).strip().lower()
+    if not text:
+        return False
+    first = text.split(",")[0]
+    if first.startswith("enabled="):
+        first = first.split("=", 1)[1]
+    return first == "1"
+
+
 def _get_vm(node: str, vmid: int) -> dict[str, Any]:
     config = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).config.get())
     return {
@@ -69,7 +87,7 @@ def _get_vm(node: str, vmid: int) -> dict[str, Any]:
         "memory_mb": config.get("memory", 0),
         "os_type": config.get("ostype", "unknown"),
         "boot_order": config.get("boot", ""),
-        "agent_enabled": bool(config.get("agent", 0)),
+        "agent_enabled": _agent_enabled(config.get("agent", "")),
         "description": config.get("description", ""),
         "tags": config.get("tags", ""),
         "onboot": bool(config.get("onboot", 0)),
