@@ -97,26 +97,88 @@ class _FakeResp:
         pass
 
 
+# A realistic slice of a Debian Packages index: multiple packages, and two
+# pve-manager stanzas so the parser's "take the max version" path is exercised.
+_PACKAGES_FIXTURE = (
+    "Package: pve-kernel-6.8\n"
+    "Version: 6.8.4-2\n"
+    "\n"
+    "Package: pve-manager\n"
+    "Version: 8.2.4\n"
+    "\n"
+    "Package: qemu-server\n"
+    "Version: 8.2.1\n"
+    "\n"
+    "Package: pve-manager\n"
+    "Version: 8.2.7\n"
+)
+
+
+def test_parse_pve_manager_version_picks_max():
+    """The parser must select pve-manager (not lookalikes) and the max version."""
+    from clustr.tools.read.updates import _parse_pve_manager_version
+
+    assert _parse_pve_manager_version(_PACKAGES_FIXTURE) == "8.2.7"
+    assert _parse_pve_manager_version("Package: qemu-server\nVersion: 9.9.9\n") is None
+
+
 async def test_check_proxmox_updates_reports_upgrade():
-    """Running version behind the roadmap's latest → upgrade-available message."""
+    """Running version behind the track's latest → update-available message."""
     from clustr.server import mcp
 
     fake = MagicMock()
-    fake.version.get.return_value = {"version": "8.1.4", "release": "8.1"}
-    roadmap = "Proxmox VE 8.2 released. Proxmox VE 8.1. Proxmox VE 7.4."
+    fake.version.get.return_value = {"version": "8.2.4", "release": "8.2"}
+    captured = {}
+
+    def fake_get(url, *args, **kwargs):
+        captured["url"] = url
+        return _FakeResp(_PACKAGES_FIXTURE)
+
     with (
         patch("clustr.tools.read.updates.get_client", return_value=fake),
-        patch("httpx.get", return_value=_FakeResp(roadmap)),
+        patch("httpx.get", side_effect=fake_get),
     ):
         out = _text(await mcp.call_tool("check_proxmox_updates", {}))
 
-    assert "8.1.4" in out  # running version reported
-    assert "8.2" in out  # latest parsed from roadmap
-    assert "upgrade is available" in out.lower()
+    assert "8.2.4" in out  # running version reported
+    assert "8.2.7" in out  # latest from the package index
+    assert "update is available" in out.lower()
+    # Track-aware: major 8 must resolve to the bookworm repo.
+    assert "bookworm" in captured["url"]
+
+
+async def test_check_proxmox_updates_up_to_date():
+    """Running == latest on the track → 'latest release' message, no upgrade."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "8.2.7", "release": "8.2"}
+    with (
+        patch("clustr.tools.read.updates.get_client", return_value=fake),
+        patch("httpx.get", return_value=_FakeResp(_PACKAGES_FIXTURE)),
+    ):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "latest release for this track" in out.lower()
+    assert "update is available" not in out.lower()
+
+
+async def test_check_proxmox_updates_unknown_track_degrades():
+    """A future major with no codename mapping degrades, still reporting running."""
+    from clustr.server import mcp
+
+    fake = MagicMock()
+    fake.version.get.return_value = {"version": "11.0.1", "release": "11.0"}
+    with patch("clustr.tools.read.updates.get_client", return_value=fake):
+        out = _text(await mcp.call_tool("check_proxmox_updates", {}))
+
+    assert "11.0.1" in out
+    assert "unavailable" in out.lower()
+    assert "unrecognized" in out.lower()
 
 
 async def test_check_proxmox_updates_degrades_when_offline():
-    """If the roadmap is unreachable, still report the running version cleanly."""
+    """If the package index is unreachable, still report the running version."""
     from clustr.server import mcp
 
     fake = MagicMock()

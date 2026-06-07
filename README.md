@@ -37,7 +37,7 @@ Clustr exposes your Proxmox VE infrastructure as MCP tools so you can manage nod
 | `list_container_snapshots` | List snapshots for a container |
 | `list_storage` | All storage pools with capacity breakdown |
 | `get_storage` | Detailed info for a specific storage pool |
-| `check_proxmox_updates` | Compare the cluster's running version to the latest Proxmox VE release (roadmap) |
+| `check_proxmox_updates` | Compare the cluster's running version to the latest `pve-manager` in Proxmox's APT repo |
 
 ### Write — Power (9)
 | Tool | Destructive? | Description |
@@ -254,7 +254,7 @@ src/clustr/
 │   │   ├── vms.py
 │   │   ├── containers.py
 │   │   ├── storage.py
-│   │   └── updates.py       # check_proxmox_updates (best-effort roadmap lookup)
+│   │   └── updates.py       # check_proxmox_updates (best-effort APT-index lookup)
 │   └── write/             # mutating tools
 │       ├── vm_power.py
 │       ├── container_power.py
