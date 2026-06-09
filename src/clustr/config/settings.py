@@ -6,7 +6,7 @@ All other modules import `get_settings()` rather than reading env directly.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -93,12 +93,6 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
-
-    @field_validator("proxmox", mode="before")
-    @classmethod
-    def _build_proxmox(cls, v: object) -> object:
-        # Allow nested dict or already-constructed model
-        return v
 
 
 @lru_cache(maxsize=1)

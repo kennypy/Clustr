@@ -84,7 +84,7 @@ Tokens expire after 5 minutes and are single-use.
 
 - Proxmox VE 7.x or 8.x
 - A Proxmox API token (not username/password)
-- Python 3.10+ or Docker
+- Python 3.11+ or Docker
 
 ### 1. Create a Proxmox API token
 

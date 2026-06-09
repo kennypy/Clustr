@@ -59,3 +59,32 @@ def test_health_endpoint(client):
     resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok", "service": "clustr"}
+
+
+def test_host_header_with_port_accepted(client):
+    """
+    Regression: real clients send the port in the Host header
+    (``Host: 127.0.0.1:8080``). The transport-security allow-list must match
+    that, not only the portless form — exact-only matching used to reject the
+    documented local setup with 421.
+    """
+    for host in ("127.0.0.1:8080", "localhost:9090"):
+        resp = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "smoke-test", "version": "1.0"},
+                },
+            },
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "Host": host,
+            },
+        )
+        assert resp.status_code == 200, f"Host {host!r} rejected: {resp.status_code}"

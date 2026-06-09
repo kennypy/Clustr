@@ -87,9 +87,19 @@ def _transport_security() -> TransportSecuritySettings:
     module never requires Proxmox credentials. Loopback is always allowed for
     local use and health checks; the public host is allow-listed from
     MCP_PUBLIC_URL, with extra hosts via MCP_ALLOWED_HOSTS (comma-separated).
+
+    The SDK matches Host/Origin values exactly unless an entry ends in ``:*``
+    (any port). Real clients send ``Host: 127.0.0.1:8080`` — with the port —
+    so every portless entry needs its ``:*`` twin or the default local setup
+    is rejected with 421.
     """
-    hosts = ["localhost", "127.0.0.1"]
-    origins = ["http://localhost", "http://127.0.0.1"]
+    hosts = ["localhost", "localhost:*", "127.0.0.1", "127.0.0.1:*"]
+    origins = [
+        "http://localhost",
+        "http://localhost:*",
+        "http://127.0.0.1",
+        "http://127.0.0.1:*",
+    ]
 
     public_url = os.environ.get("MCP_PUBLIC_URL", "").strip()
     if public_url:
@@ -97,11 +107,15 @@ def _transport_security() -> TransportSecuritySettings:
         if parsed.netloc:
             hosts.append(parsed.netloc)
             origins.append(f"{parsed.scheme}://{parsed.netloc}")
+            if ":" not in parsed.netloc:
+                hosts.append(f"{parsed.netloc}:*")
 
     for extra in os.environ.get("MCP_ALLOWED_HOSTS", "").split(","):
         extra = extra.strip()
         if extra:
             hosts.append(extra)
+            if ":" not in extra:
+                hosts.append(f"{extra}:*")
 
     return TransportSecuritySettings(allowed_hosts=hosts, allowed_origins=origins)
 
@@ -265,8 +279,6 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.port:
-        import os
-
         os.environ["MCP_PORT"] = str(args.port)
         # Reset settings cache so new port is picked up
         get_settings.cache_clear()
