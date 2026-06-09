@@ -68,7 +68,9 @@ Deletion is a two-step flow to prevent accidental destruction:
 1. Call `vm_delete_request` / `container_delete_request` → get a confirmation token
 2. Call `vm_delete_confirm` / `container_delete_confirm` with the token + exact name
 
-Tokens expire after 5 minutes and are single-use.
+Tokens expire after 5 minutes and are single-use. Before deleting, the target
+is re-verified against the name captured at request time, so a VMID/CTID that
+was deleted and reused in the meantime is never destroyed by a stale token.
 
 ### Write — Create (2)
 | Tool | Description |
@@ -147,8 +149,10 @@ clustr --stdio
 ## Connect to Claude
 
 ### Claude.ai custom connector
+Claude.ai connects over the public internet, so the server must be reachable
+via HTTPS — see [Deployment](#deployment) for the Cloudflare Tunnel setup.
 1. Go to **Settings → Integrations → Add Custom MCP**
-2. Enter your server URL: `http://your-server-ip:8080/mcp`
+2. Enter your public server URL: `https://clustr.your-domain.com/mcp`
 
 ### Claude Desktop
 Add to `claude_desktop_config.json`:
@@ -164,16 +168,27 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-Or via HTTP (if running as a service):
+Or via HTTP if Clustr runs as a service on the same machine:
 ```json
 {
   "mcpServers": {
     "clustr": {
-      "url": "http://your-server-ip:8080/mcp"
+      "url": "http://127.0.0.1:8080/mcp"
     }
   }
 }
 ```
+
+To connect from another machine on your network, two settings must change
+(and understand the security note below first):
+1. Bind beyond loopback: set `MCP_HOST=0.0.0.0` (already the case inside
+   Docker — but the provided compose file publishes the port to the host's
+   loopback only, so edit `ports` there too).
+2. Allow the Host header clients will send: requests whose `Host` is not
+   allow-listed are rejected with `421` (DNS-rebinding protection). Loopback
+   (`localhost` / `127.0.0.1`, any port) is always allowed; anything else must
+   be added, e.g. `MCP_ALLOWED_HOSTS=192.168.1.50` for
+   `http://192.168.1.50:8080/mcp`.
 
 ---
 
@@ -202,9 +217,11 @@ publicly with a reverse proxy:
   Set `MCP_PUBLIC_URL=https://clustr.your-domain.com` so the OAuth
   protected-resource metadata advertises the correct HTTPS URL, and add that
   host to the transport-security allow-list (it is added automatically from
-  `MCP_PUBLIC_URL`; add more via `MCP_ALLOWED_HOSTS`). Cloudflare forwards
-  `X-Forwarded-Proto`/`X-Forwarded-Host`, which Clustr uses to derive the
-  resource URL when `MCP_PUBLIC_URL` is unset.
+  `MCP_PUBLIC_URL`; add more via `MCP_ALLOWED_HOSTS`). If you leave
+  `MCP_PUBLIC_URL` unset, set `MCP_TRUST_PROXY=true` instead so Clustr derives
+  the resource URL from the `X-Forwarded-Proto`/`X-Forwarded-Host` headers the
+  tunnel sends — that flag is off by default because without a proxy in front,
+  any client could spoof those headers.
 
 - **Scaling / multiple workers.** The two-step delete flow keeps confirmation
   tokens **in process memory**. If you run more than one worker or replica,
@@ -276,7 +293,8 @@ src/clustr/
 - All Proxmox calls flow through `proxmox_get`/`proxmox_post`, which translate
   errors and recover once from a dropped connection
 - OAuth middleware is a true no-op when disabled — zero overhead
-- DNS-rebinding protection on the HTTP transport; allow-list driven by `MCP_PUBLIC_URL`
+- DNS-rebinding protection on the HTTP transport; loopback always allowed,
+  plus the `MCP_PUBLIC_URL` host and any `MCP_ALLOWED_HOSTS` entries
 
 ---
 

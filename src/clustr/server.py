@@ -114,23 +114,30 @@ def _transport_security() -> TransportSecuritySettings:
         extra = extra.strip()
         if extra:
             hosts.append(extra)
+            origins.extend([f"https://{extra}", f"http://{extra}"])
             if ":" not in extra:
                 hosts.append(f"{extra}:*")
+                origins.extend([f"https://{extra}:*", f"http://{extra}:*"])
 
     return TransportSecuritySettings(allowed_hosts=hosts, allowed_origins=origins)
 
 
-def _resource_from_request(request: Request) -> str:
+def _resource_from_request(request: Request, trust_proxy: bool) -> str:
     """
     Best-effort canonical URL of this server from the incoming request.
 
-    Honors the X-Forwarded-Proto / X-Forwarded-Host headers set by a reverse
-    proxy (e.g. Cloudflare) so the advertised resource is the public HTTPS URL,
-    not the internal bind address.
+    When ``trust_proxy`` is true, honors the X-Forwarded-Proto /
+    X-Forwarded-Host headers set by a reverse proxy (e.g. Cloudflare) so the
+    advertised resource is the public HTTPS URL, not the internal bind address.
+    Off by default: without a proxy in front, any client could set those
+    headers and inject an arbitrary host into the advertised URL.
     """
     headers = request.headers
-    proto = headers.get("x-forwarded-proto") or request.url.scheme
-    host = headers.get("x-forwarded-host") or headers.get("host") or request.url.netloc
+    proto = request.url.scheme
+    host = headers.get("host") or request.url.netloc
+    if trust_proxy:
+        proto = headers.get("x-forwarded-proto") or proto
+        host = headers.get("x-forwarded-host") or host
     return f"{proto}://{host}"
 
 
@@ -165,7 +172,7 @@ def _build_mcp() -> FastMCP:
         """
         settings = get_settings()
         resource = settings.server.public_url.rstrip("/") or _resource_from_request(
-            request
+            request, settings.server.trust_proxy
         )
         return JSONResponse(
             {

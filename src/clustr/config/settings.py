@@ -69,6 +69,15 @@ class ServerSettings(BaseSettings):
             "metadata. Leave empty in non-public deployments."
         ),
     )
+    trust_proxy: bool = Field(
+        False,
+        description=(
+            "Trust X-Forwarded-Proto / X-Forwarded-Host headers when deriving "
+            "this server's canonical URL. Enable only when a trusted reverse "
+            "proxy (e.g. Cloudflare Tunnel) sets them; otherwise any client "
+            "could spoof the advertised URL."
+        ),
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="MCP_",

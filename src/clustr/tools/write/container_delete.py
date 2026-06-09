@@ -105,6 +105,25 @@ def _confirm_container_delete(confirmation_token: str, container_hostname: str) 
 
         del _pending_deletes[confirmation_token]
 
+    # Re-verify the target right before deleting: within the token's lifetime
+    # the container could have been removed and the CTID reused. A failed
+    # re-check consumes the token; the caller must re-request.
+    try:
+        config = proxmox_get(lambda: get_client().nodes(node).lxc(ctid).config.get())
+    except Exception as exc:
+        raise ProxmoxError(
+            f"Could not verify container {ctid} on node '{node}' before deletion "
+            f"(it may no longer exist); nothing was deleted: {exc}"
+        ) from exc
+    current_hostname = config.get("hostname", f"ct-{ctid}")
+    if current_hostname != pending["hostname"]:
+        raise ProxmoxError(
+            f"Container {ctid} is now named '{current_hostname}', not "
+            f"'{pending['hostname']}' — the CTID may have been reused since the "
+            f"delete request. Nothing was deleted. Call container_delete_request "
+            f"again."
+        )
+
     return cast(
         str,
         proxmox_post(

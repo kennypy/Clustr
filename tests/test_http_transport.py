@@ -61,6 +61,51 @@ def test_health_endpoint(client):
     assert resp.json() == {"status": "ok", "service": "clustr"}
 
 
+def test_forwarded_headers_ignored_by_default(client, monkeypatch):
+    """
+    Without MCP_TRUST_PROXY=true, X-Forwarded-* headers must not influence the
+    advertised resource URL — otherwise any client could spoof it.
+    """
+    from clustr.config.settings import get_settings
+
+    monkeypatch.delenv("MCP_PUBLIC_URL", raising=False)
+    monkeypatch.delenv("MCP_TRUST_PROXY", raising=False)
+    get_settings.cache_clear()
+    try:
+        resp = client.get(
+            "/.well-known/oauth-protected-resource",
+            headers={
+                "X-Forwarded-Host": "evil.example.com",
+                "X-Forwarded-Proto": "https",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["resource"] == "http://localhost"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_forwarded_headers_honored_when_proxy_trusted(client, monkeypatch):
+    """With MCP_TRUST_PROXY=true the proxy-supplied host/proto are used."""
+    from clustr.config.settings import get_settings
+
+    monkeypatch.delenv("MCP_PUBLIC_URL", raising=False)
+    monkeypatch.setenv("MCP_TRUST_PROXY", "true")
+    get_settings.cache_clear()
+    try:
+        resp = client.get(
+            "/.well-known/oauth-protected-resource",
+            headers={
+                "X-Forwarded-Host": "clustr.example.com",
+                "X-Forwarded-Proto": "https",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["resource"] == "https://clustr.example.com"
+    finally:
+        get_settings.cache_clear()
+
+
 def test_host_header_with_port_accepted(client):
     """
     Regression: real clients send the port in the Host header
