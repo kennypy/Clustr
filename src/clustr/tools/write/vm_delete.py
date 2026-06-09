@@ -120,6 +120,24 @@ def _confirm_vm_delete(confirmation_token: str, vm_name: str) -> str:
     node = pending["node"]
     vmid = pending["vmid"]
 
+    # Re-verify the target right before deleting: within the token's lifetime
+    # the VM could have been removed and the VMID reused for something else.
+    # A failed re-check consumes the token; the caller must re-request.
+    try:
+        config = proxmox_get(lambda: get_client().nodes(node).qemu(vmid).config.get())
+    except Exception as exc:
+        raise ProxmoxError(
+            f"Could not verify VM {vmid} on node '{node}' before deletion (it may "
+            f"no longer exist); nothing was deleted: {exc}"
+        ) from exc
+    current_name = config.get("name", f"vm-{vmid}")
+    if current_name != pending["name"]:
+        raise ProxmoxError(
+            f"VM {vmid} is now named '{current_name}', not '{pending['name']}' — "
+            f"the VMID may have been reused since the delete request. Nothing was "
+            f"deleted. Call vm_delete_request again."
+        )
+
     return cast(
         str,
         proxmox_post(

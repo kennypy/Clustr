@@ -65,7 +65,9 @@ def test_vm_delete_token_consumed_on_use():
     }
 
     mock_client = MagicMock()
-    mock_client.nodes.return_value.qemu.return_value.delete.return_value = "UPID:task"
+    qemu = mock_client.nodes.return_value.qemu.return_value
+    qemu.config.get.return_value = {"name": "my-vm"}
+    qemu.delete.return_value = "UPID:task"
 
     with patch("clustr.tools.write.vm_delete.get_client", return_value=mock_client):
         mod._confirm_vm_delete(token, "my-vm")
@@ -96,6 +98,7 @@ def test_vm_delete_uses_hyphenated_destroy_param():
 
     mock_client = MagicMock()
     qemu = mock_client.nodes.return_value.qemu.return_value
+    qemu.config.get.return_value = {"name": "my-vm"}
     qemu.delete.return_value = "UPID:task"
 
     with patch("clustr.tools.write.vm_delete.get_client", return_value=mock_client):
@@ -126,6 +129,7 @@ def test_container_delete_uses_hyphenated_destroy_param():
 
     mock_client = MagicMock()
     lxc = mock_client.nodes.return_value.lxc.return_value
+    lxc.config.get.return_value = {"hostname": "my-container"}
     lxc.delete.return_value = "UPID:task"
 
     with patch(
@@ -137,6 +141,39 @@ def test_container_delete_uses_hyphenated_destroy_param():
     assert kwargs.get("destroy-unreferenced-disks") == 1
     assert "destroy_unreferenced_disks" not in kwargs
     _reset_ct_tokens()
+
+
+def test_vm_delete_rejects_reused_vmid():
+    """
+    Confirm must re-verify the target right before deleting: if the VMID now
+    belongs to a different VM (deleted + recreated within the token TTL), the
+    delete must be refused and nothing destroyed.
+    """
+    import secrets
+
+    import clustr.tools.write.vm_delete as mod
+    from clustr.proxmox.client import ProxmoxError
+
+    _reset_vm_tokens()
+
+    token = secrets.token_hex(16)
+    mod._pending_deletes[token] = {
+        "node": "pve",
+        "vmid": 100,
+        "name": "my-vm",
+        "expires": time.monotonic() + 300,
+    }
+
+    mock_client = MagicMock()
+    qemu = mock_client.nodes.return_value.qemu.return_value
+    qemu.config.get.return_value = {"name": "different-vm"}  # VMID was reused
+
+    with patch("clustr.tools.write.vm_delete.get_client", return_value=mock_client):
+        with pytest.raises(ProxmoxError, match="reused"):
+            mod._confirm_vm_delete(token, "my-vm")
+
+    qemu.delete.assert_not_called()
+    _reset_vm_tokens()
 
 
 def test_vm_delete_expired_token_rejected():

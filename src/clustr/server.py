@@ -87,9 +87,19 @@ def _transport_security() -> TransportSecuritySettings:
     module never requires Proxmox credentials. Loopback is always allowed for
     local use and health checks; the public host is allow-listed from
     MCP_PUBLIC_URL, with extra hosts via MCP_ALLOWED_HOSTS (comma-separated).
+
+    The SDK matches Host/Origin values exactly unless an entry ends in ``:*``
+    (any port). Real clients send ``Host: 127.0.0.1:8080`` — with the port —
+    so every portless entry needs its ``:*`` twin or the default local setup
+    is rejected with 421.
     """
-    hosts = ["localhost", "127.0.0.1"]
-    origins = ["http://localhost", "http://127.0.0.1"]
+    hosts = ["localhost", "localhost:*", "127.0.0.1", "127.0.0.1:*"]
+    origins = [
+        "http://localhost",
+        "http://localhost:*",
+        "http://127.0.0.1",
+        "http://127.0.0.1:*",
+    ]
 
     public_url = os.environ.get("MCP_PUBLIC_URL", "").strip()
     if public_url:
@@ -97,26 +107,37 @@ def _transport_security() -> TransportSecuritySettings:
         if parsed.netloc:
             hosts.append(parsed.netloc)
             origins.append(f"{parsed.scheme}://{parsed.netloc}")
+            if ":" not in parsed.netloc:
+                hosts.append(f"{parsed.netloc}:*")
 
     for extra in os.environ.get("MCP_ALLOWED_HOSTS", "").split(","):
         extra = extra.strip()
         if extra:
             hosts.append(extra)
+            origins.extend([f"https://{extra}", f"http://{extra}"])
+            if ":" not in extra:
+                hosts.append(f"{extra}:*")
+                origins.extend([f"https://{extra}:*", f"http://{extra}:*"])
 
     return TransportSecuritySettings(allowed_hosts=hosts, allowed_origins=origins)
 
 
-def _resource_from_request(request: Request) -> str:
+def _resource_from_request(request: Request, trust_proxy: bool) -> str:
     """
     Best-effort canonical URL of this server from the incoming request.
 
-    Honors the X-Forwarded-Proto / X-Forwarded-Host headers set by a reverse
-    proxy (e.g. Cloudflare) so the advertised resource is the public HTTPS URL,
-    not the internal bind address.
+    When ``trust_proxy`` is true, honors the X-Forwarded-Proto /
+    X-Forwarded-Host headers set by a reverse proxy (e.g. Cloudflare) so the
+    advertised resource is the public HTTPS URL, not the internal bind address.
+    Off by default: without a proxy in front, any client could set those
+    headers and inject an arbitrary host into the advertised URL.
     """
     headers = request.headers
-    proto = headers.get("x-forwarded-proto") or request.url.scheme
-    host = headers.get("x-forwarded-host") or headers.get("host") or request.url.netloc
+    proto = request.url.scheme
+    host = headers.get("host") or request.url.netloc
+    if trust_proxy:
+        proto = headers.get("x-forwarded-proto") or proto
+        host = headers.get("x-forwarded-host") or host
     return f"{proto}://{host}"
 
 
@@ -151,7 +172,7 @@ def _build_mcp() -> FastMCP:
         """
         settings = get_settings()
         resource = settings.server.public_url.rstrip("/") or _resource_from_request(
-            request
+            request, settings.server.trust_proxy
         )
         return JSONResponse(
             {
@@ -265,8 +286,6 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.port:
-        import os
-
         os.environ["MCP_PORT"] = str(args.port)
         # Reset settings cache so new port is picked up
         get_settings.cache_clear()

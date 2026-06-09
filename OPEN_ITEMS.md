@@ -7,7 +7,9 @@ them.
 - [ ] **OAuth implementation.** `auth/oauth.py` `_validate_token` is still a stub
       (raises `NotImplementedError`). Real OAuth 2.1 (token validation against a
       provider + populated `authorization_servers`) is required for directory
-      listing. Also gates per-user credentials below.
+      listing. Also gates per-user credentials below. When wiring it, the JWKS
+      helpers need hardening: `_jwks_cache` has no TTL (key rotation breaks it)
+      and no lock (concurrent first requests race).
 - [ ] **Privacy policy / Terms contacts + hosting.** `PRIVACY.md` and `TERMS.md`
       use placeholder contact emails. Replace with real addresses and host them
       at public URLs to provide during submission.
@@ -37,3 +39,10 @@ them.
 - Lint/type/format clean (ruff, black, mypy --strict); CI runs all four gates.
 - CI and Docker install from `uv.lock` (`uv sync --frozen`) — reproducible
   builds; dependency drift now fails the build.
+- Full code review (2026-06): Host allow-list now matches Host headers that
+  include a port (the SDK needs explicit `:*` entries — portless-only entries
+  421'd the default local setup); `X-Forwarded-*` honored only with
+  `MCP_TRUST_PROXY=true`; `MCP_ALLOWED_HOSTS` entries also added to allowed
+  origins; delete-confirm re-verifies the target name before destroying
+  (VMID/CTID reuse guard); Docker healthcheck and compose port respect
+  `MCP_PORT`; README/.env.example aligned with actual behavior.

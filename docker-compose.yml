@@ -8,13 +8,15 @@ services:
     # so it is not reachable from the LAN. Put a reverse proxy / Cloudflare
     # Tunnel in front (pointing at 127.0.0.1:8080) for remote access, and enable
     # auth before exposing it publicly.
+    # MCP_PORT is interpolated from .env (default 8080) so the published port,
+    # the in-container listener, and the health check stay in sync.
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${MCP_PORT:-8080}:${MCP_PORT:-8080}"
     env_file:
       - .env
     healthcheck:
       test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+             "import os, urllib.request; urllib.request.urlopen('http://localhost:%s/health' % os.environ.get('MCP_PORT', '8080'))"]
       interval: 30s
       timeout: 5s
       retries: 3
