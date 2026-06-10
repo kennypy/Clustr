@@ -1,0 +1,76 @@
+{
+  "manifest_version": "0.3",
+  "name": "clustr",
+  "display_name": "Clustr — Proxmox",
+  "version": "0.1.0",
+  "description": "Manage your Proxmox VE cluster (nodes, VMs, LXC containers) from Claude.",
+  "long_description": "Clustr exposes your Proxmox VE infrastructure as MCP tools so you can inspect and manage nodes, VMs, and LXC containers directly from Claude. Runs locally over stdio — no network port is opened. It can only do what the Proxmox API token you provide is allowed to do; use a least-privilege token (PVEAuditor for read-only).",
+  "author": {
+    "name": "Ken"
+  },
+  "license": "MIT",
+  "keywords": ["proxmox", "mcp", "infrastructure", "homelab"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "PROXMOX_HOST": "${user_config.proxmox_host}",
+        "PROXMOX_USER": "${user_config.proxmox_user}",
+        "PROXMOX_TOKEN_NAME": "${user_config.proxmox_token_name}",
+        "PROXMOX_TOKEN_VALUE": "${user_config.proxmox_token_value}",
+        "PROXMOX_PORT": "${user_config.proxmox_port}",
+        "PROXMOX_VERIFY_SSL": "${user_config.proxmox_verify_ssl}"
+      }
+    }
+  },
+  "user_config": {
+    "proxmox_host": {
+      "type": "string",
+      "title": "Proxmox Host",
+      "description": "IP or hostname of your Proxmox node (e.g. 192.168.1.10)",
+      "required": true
+    },
+    "proxmox_user": {
+      "type": "string",
+      "title": "Proxmox User",
+      "description": "Proxmox user with the realm, e.g. root@pam",
+      "default": "root@pam",
+      "required": true
+    },
+    "proxmox_token_name": {
+      "type": "string",
+      "title": "API Token Name",
+      "description": "The API token ID you created in Proxmox (Datacenter → API Tokens)",
+      "required": true
+    },
+    "proxmox_token_value": {
+      "type": "string",
+      "title": "API Token Secret",
+      "description": "The token secret value. Stored securely in your OS keychain.",
+      "sensitive": true,
+      "required": true
+    },
+    "proxmox_port": {
+      "type": "number",
+      "title": "API Port",
+      "description": "Proxmox API port",
+      "default": 8006,
+      "required": false
+    },
+    "proxmox_verify_ssl": {
+      "type": "boolean",
+      "title": "Verify TLS certificate",
+      "description": "Leave off for Proxmox's default self-signed certificate.",
+      "default": false,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

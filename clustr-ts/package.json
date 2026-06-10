@@ -1,0 +1,25 @@
+{
+  "name": "clustr-ts",
+  "version": "0.1.0",
+  "description": "Manage your Proxmox VE cluster from Claude",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "undici": "^7.27.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2",
+    "@types/node": "^22.19.20",
+    "typescript": "^5.9.3"
+  },
+  "type": "module"
+}
