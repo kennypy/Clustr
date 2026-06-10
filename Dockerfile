@@ -47,6 +47,12 @@ USER clustr
 # publish this port to a public/LAN address without auth in front. The provided
 # docker-compose.yml publishes to 127.0.0.1 only; put a reverse proxy / tunnel
 # in front for remote access.
+#
+# Because 0.0.0.0 is non-loopback, the server refuses to start unauthenticated
+# unless MCP_ALLOW_UNAUTHENTICATED is set. That override is intentionally NOT
+# baked into the image — it is supplied by docker-compose.yml (which also pins
+# the published port to loopback), so a bare `docker run` fails closed until the
+# operator consciously opts in or puts auth in front.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     MCP_HOST=0.0.0.0 \

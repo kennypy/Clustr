@@ -132,30 +132,30 @@ PROXMOX_VERIFY_SSL=false
 
 ### 4. Run
 
-**HTTP (primary — for Claude.ai custom connector)**
+**stdio (simplest — for Claude Desktop / local use)**
+```bash
+clustr --stdio
+```
+No network port, no exposure — the recommended way to run it on a single machine.
+
+**HTTP (loopback only by default)**
 ```bash
 clustr
 # or
 clustr --port 9090
 ```
-
-**stdio (for Claude Desktop)**
-```bash
-clustr --stdio
-```
+This binds `127.0.0.1` and has **no authentication** (OAuth is not yet
+implemented — see Security). It is meant to sit behind an authenticating reverse
+proxy or tunnel. The server **refuses to start** on a non-loopback address while
+unauthenticated; do not work around that by exposing it directly — put auth in
+front (see Deployment).
 
 ---
 
 ## Connect to Claude
 
-### Claude.ai custom connector
-Claude.ai connects over the public internet, so the server must be reachable
-via HTTPS — see [Deployment](#deployment) for the Cloudflare Tunnel setup.
-1. Go to **Settings → Integrations → Add Custom MCP**
-2. Enter your public server URL: `https://clustr.your-domain.com/mcp`
-
-### Claude Desktop
-Add to `claude_desktop_config.json`:
+### Claude Desktop (recommended)
+Run it over stdio — no network, no exposure. Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -179,6 +179,15 @@ Or via HTTP if Clustr runs as a service on the same machine:
 }
 ```
 
+### Claude.ai custom connector
+A remote connector needs a **public HTTPS URL with authentication in front** —
+Claude.ai will not accept a plain `http://<ip>:8080` endpoint, and you should
+never expose Clustr's unauthenticated `/mcp` directly. Put it behind an
+authenticating tunnel/proxy (see [Deployment](#deployment)), then add the
+**HTTPS** URL of that front door under **Settings → Connectors → Add custom
+connector**. Until OAuth is implemented (see Security), the front door is what
+authenticates callers.
+
 To connect from another machine on your network, two settings must change
 (and understand the security note below first):
 1. Bind beyond loopback: set `MCP_HOST=0.0.0.0` (already the case inside
@@ -194,34 +203,64 @@ To connect from another machine on your network, two settings must change
 
 ## Security
 
-**Network access:**
-Clustr does not implement authentication by default. Protect the `/mcp` endpoint:
-- Bind to `127.0.0.1` for local-only access
-- Use a reverse proxy (Nginx, Caddy) with mTLS or IP allowlisting for remote access
-- Cloudflare Tunnel with Access rules is the recommended production approach
+Read this before pointing Clustr at anything you care about.
 
-**OAuth 2.1:**
-OAuth 2.1 + PKCE support is stubbed and ready to wire. Set `OAUTH_ENABLED=true` and complete the `TODO` in `src/clustr/auth/oauth.py` to activate full token validation.
+**Scope the Proxmox token first — this is your real safety net.**
+Clustr can only do what its API token is allowed to do, and Proxmox enforces that
+regardless of any bug in Clustr or any misfire by the model. Use least privilege:
+- **Read-only / first run:** a privilege-separated token granted the `PVEAuditor`
+  role. It can list and inspect everything and change *nothing* — write tools
+  return `403`. Start here.
+  ```bash
+  pveum user token add root@pam clustr-ro --privsep 1
+  pveum acl modify / --roles PVEAuditor --tokens 'root@pam!clustr-ro'
+  ```
+- **Writes:** grant `PVEVMAdmin`/`PVEAdmin` **only on a dedicated resource pool**
+  (e.g. a `clustr` pool holding the guests you want managed), not datacenter-wide.
+  Then a stray delete cannot touch anything outside that pool.
 
-**Proxmox permissions:**
-For read-only use, create a Proxmox user with `PVEAuditor` role. For write operations, `PVEAdmin` or `Administrator` is required.
+**There is no app-level authentication yet.** OAuth 2.1 is **not implemented** —
+the middleware is a stub, and setting `OAUTH_ENABLED=true` currently rejects every
+request (it does not provide working auth). So the only functioning mode is
+*unauthenticated*. Consequences:
+- The server **refuses to start** on a non-loopback address while unauthenticated.
+  Run it on `127.0.0.1`/stdio, or put an authenticating proxy/tunnel in front and
+  set `MCP_ALLOW_UNAUTHENTICATED=true` to acknowledge that the front door
+  authenticates (see Deployment).
+- Do **not** publish `/mcp` to a LAN/public address directly. Anyone who reaches
+  it has whatever access the Proxmox token grants.
+
+**Transport:** `PROXMOX_VERIFY_SSL=false` (the default, for PVE's self-signed
+cert) sends the token over an unverified TLS connection. Keep it on a trusted
+network, or install a valid certificate and set it to `true`.
+
+**Bottom line:** today Clustr is appropriate as a **single-user, loopback/stdio**
+tool, or behind an authenticating front door. It is not yet suitable to expose
+directly or to hand to untrusted callers.
 
 ---
 
 ## Deployment
 
-Clustr binds to `127.0.0.1` and speaks plain HTTP. Terminate TLS and expose it
-publicly with a reverse proxy:
+Clustr binds to `127.0.0.1` and speaks plain HTTP. Keep it on loopback and let a
+front door terminate TLS **and authenticate callers** — that front door is the
+access control until OAuth lands.
 
-- **Cloudflare Tunnel (recommended).** Point a tunnel at `http://127.0.0.1:8080`.
-  Set `MCP_PUBLIC_URL=https://clustr.your-domain.com` so the OAuth
-  protected-resource metadata advertises the correct HTTPS URL, and add that
-  host to the transport-security allow-list (it is added automatically from
-  `MCP_PUBLIC_URL`; add more via `MCP_ALLOWED_HOSTS`). If you leave
-  `MCP_PUBLIC_URL` unset, set `MCP_TRUST_PROXY=true` instead so Clustr derives
-  the resource URL from the `X-Forwarded-Proto`/`X-Forwarded-Host` headers the
-  tunnel sends — that flag is off by default because without a proxy in front,
-  any client could spoof those headers.
+- **Cloudflare Tunnel (recommended).** Point a tunnel at `http://127.0.0.1:8080`
+  and require authentication with **Cloudflare Access** (the tunnel, not Clustr,
+  authenticates). Because Clustr stays on loopback, it starts normally with no
+  override needed. Set `MCP_PUBLIC_URL=https://clustr.your-domain.com` so the
+  advertised resource URL is correct, and add that host to the
+  transport-security allow-list (added automatically from `MCP_PUBLIC_URL`; more
+  via `MCP_ALLOWED_HOSTS`). If you leave `MCP_PUBLIC_URL` unset, set
+  `MCP_TRUST_PROXY=true` so Clustr derives the resource URL from the
+  `X-Forwarded-Proto`/`X-Forwarded-Host` headers the tunnel sends — off by
+  default because otherwise any client could spoof those headers.
+
+  > If your proxy must reach Clustr over a network (not loopback) — e.g. a proxy
+  > in a separate container — you'll bind a non-loopback address and must set
+  > `MCP_ALLOW_UNAUTHENTICATED=true` to acknowledge that the proxy is enforcing
+  > auth. Only do this when that is actually true.
 
 - **Scaling / multiple workers.** The two-step delete flow keeps confirmation
   tokens **in process memory**. If you run more than one worker or replica,

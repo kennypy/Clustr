@@ -61,6 +61,16 @@ class ServerSettings(BaseSettings):
     host: str = Field("127.0.0.1")
     port: int = Field(8080, ge=1, le=65535)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field("INFO")
+    allow_unauthenticated: bool = Field(
+        False,
+        description=(
+            "Explicitly permit binding a non-loopback address while OAuth is "
+            "disabled (i.e. with no authentication on /mcp). Only set this when "
+            "access control is enforced elsewhere — a reverse proxy or tunnel "
+            "that authenticates, or container/network isolation. Without it, the "
+            "server refuses to start in that configuration."
+        ),
+    )
     public_url: str = Field(
         "",
         description=(
