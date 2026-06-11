@@ -25,7 +25,27 @@ interface BackupRow {
   size?: number;
   ctime?: number;
   format?: string;
+  subtype?: string;
   notes?: string;
+}
+
+/**
+ * Is this backup entry a QEMU VM backup (vs. an LXC container backup)?
+ *
+ * Works across storage types, which encode the type differently:
+ *   - file (local/NFS): volid `…/vzdump-qemu-100-…` (VM) vs `…vzdump-lxc-…` (CT)
+ *   - PBS: volid `pbs:backup/vm/100/…` (VM) vs `…/ct/…` (CT), plus a `subtype`.
+ * Prefer the explicit `subtype` when present; otherwise exclude only entries
+ * that clearly look like containers, and include everything else — biasing
+ * toward showing a backup rather than silently hiding a real VM archive.
+ */
+export function isVmBackup(r: BackupRow): boolean {
+  if (r.subtype) return r.subtype === "qemu";
+  const v = String(r.volid ?? "").toLowerCase();
+  if (v.includes("vzdump-lxc-") || v.includes("/ct/") || v.includes("pbs-ct")) {
+    return false;
+  }
+  return true;
 }
 
 export function register(server: McpServer): void {
@@ -35,8 +55,9 @@ export function register(server: McpServer): void {
       title: "List VM Backups",
       description:
         "List VM backup archives on a storage (volume id, source VM ID, size, " +
-        "creation time). Optionally filter to one VM. Use the volume id with " +
-        "restore_vm_request to restore.",
+        "creation time). Works with both file storages (vzdump) and Proxmox " +
+        "Backup Server (PBS). Optionally filter to one VM. Use the volume id " +
+        "with restore_vm_request to restore.",
       inputSchema: {
         node: z.string().describe("Node that can see the storage (e.g. 'pve')"),
         storage: z
@@ -58,8 +79,9 @@ export function register(server: McpServer): void {
           { content: "backup" },
         )) as BackupRow[];
 
-        // VM backups are vzdump-qemu-*; drop container (lxc) archives.
-        rows = rows.filter((r) => String(r.volid ?? "").includes("qemu"));
+        // Keep VM backups, drop container ones — across file storages AND PBS
+        // (whose volids look like `pbs:backup/vm/100/…`, not `vzdump-qemu-*`).
+        rows = rows.filter(isVmBackup);
         if (vmid !== undefined) {
           rows = rows.filter((r) => Number(r.vmid) === vmid);
         }
