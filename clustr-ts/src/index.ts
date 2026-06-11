@@ -15,14 +15,32 @@ import { register as registerVms } from "./tools/read/vms.js";
 import { register as registerContainers } from "./tools/read/containers.js";
 import { register as registerStorage } from "./tools/read/storage.js";
 import { register as registerUpdates } from "./tools/read/updates.js";
+import { register as registerVmPower } from "./tools/write/vmPower.js";
+import { register as registerContainerPower } from "./tools/write/containerPower.js";
+import { register as registerVmSnapshots } from "./tools/write/vmSnapshots.js";
+import { register as registerContainerSnapshots } from "./tools/write/containerSnapshots.js";
+import { register as registerVmDelete } from "./tools/write/vmDelete.js";
+import { register as registerContainerDelete } from "./tools/write/containerDelete.js";
+import { register as registerVmCreate } from "./tools/write/vmCreate.js";
+import { register as registerContainerCreate } from "./tools/write/containerCreate.js";
 
 export function buildServer(): McpServer {
   const server = new McpServer({ name: "clustr", version: "0.1.0" });
+  // Read
   registerNodes(server);
   registerVms(server);
   registerContainers(server);
   registerStorage(server);
   registerUpdates(server);
+  // Write
+  registerVmPower(server);
+  registerContainerPower(server);
+  registerVmSnapshots(server);
+  registerContainerSnapshots(server);
+  registerVmDelete(server);
+  registerContainerDelete(server);
+  registerVmCreate(server);
+  registerContainerCreate(server);
   return server;
 }
 

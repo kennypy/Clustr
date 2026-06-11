@@ -12,8 +12,10 @@ scope of the Proxmox API token you provide (use `PVEAuditor` for read-only).
 ## Status
 
 - ✅ Read tools (15): nodes, VMs, containers, storage, update check.
-- ⏳ Write tools (power, snapshots, two-step delete, create) — porting next,
-  carrying over the confirm/two-step safeguards from the Python implementation.
+- ✅ Write tools (21): power, snapshots, two-step delete, create — full 36-tool
+  parity with the Python implementation, with the same safeguards: `confirm=true`
+  on destructive ops, two-step delete (single-use 5-min token + exact-name match
+  + reuse re-verification), and the hyphenated `destroy-unreferenced-disks` param.
 
 ## Develop
 
