@@ -1,0 +1,146 @@
+/**
+ * Fetch templates and ISOs onto storage — so Claude can get what create needs,
+ * instead of telling you to download it by hand.
+ *
+ *   list_available_templates → the appliance index (pveam) of downloadable CT
+ *                              templates (read).
+ *   download_template        → pull one of those onto a storage (write).
+ *   download_from_url        → fetch an ISO or template from any URL (write).
+ */
+
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+import { proxmoxGet, proxmoxPost } from "../../proxmox.js";
+import { safe } from "../../safe.js";
+
+const READ = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+} as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
+
+interface ApiTemplate {
+  template?: string;
+  os?: string;
+  version?: string;
+  headline?: string;
+  section?: string;
+}
+
+export function register(server: McpServer): void {
+  server.registerTool(
+    "list_available_templates",
+    {
+      title: "List Downloadable Templates",
+      description:
+        "List LXC container templates available to download from the Proxmox " +
+        "appliance index (pveam). Use 'search' to narrow (e.g. 'debian', " +
+        "'ubuntu') — the full list is long. Pass a returned 'template' name to " +
+        "download_template.",
+      inputSchema: {
+        node: z.string().describe("Node name (e.g. 'pve')"),
+        search: z
+          .string()
+          .optional()
+          .describe("Filter by name/OS/headline, e.g. 'debian'"),
+      },
+      annotations: READ,
+    },
+    async ({ node, search }) =>
+      safe("list_available_templates", async () => {
+        let rows = (await proxmoxGet(`/nodes/${node}/aplinfo`)) as ApiTemplate[];
+        if (search) {
+          const q = search.toLowerCase();
+          rows = rows.filter((r) =>
+            `${r.template} ${r.os} ${r.headline}`.toLowerCase().includes(q),
+          );
+        }
+        if (!rows.length) {
+          return `No downloadable templates${search ? ` matching '${search}'` : ""} found.`;
+        }
+        const capped = rows.slice(0, 60);
+        const lines = [
+          `## Downloadable templates (${rows.length}${
+            rows.length > capped.length ? `, showing ${capped.length}` : ""
+          })\n`,
+        ];
+        for (const r of capped) {
+          lines.push(`- \`${r.template}\` — ${r.headline ?? r.os ?? ""}`);
+        }
+        if (rows.length > capped.length) {
+          lines.push("\nNarrow with `search` to see more.");
+        }
+        lines.push("\nDownload one with `download_template` (node, storage, template).");
+        return lines.join("\n");
+      }),
+  );
+
+  server.registerTool(
+    "download_template",
+    {
+      title: "Download Container Template",
+      description:
+        "Download an LXC template from the appliance index onto a storage. " +
+        "'template' is a name from list_available_templates; 'storage' must " +
+        "accept container templates (e.g. 'local').",
+      inputSchema: {
+        node: z.string().describe("Node name"),
+        storage: z.string().describe("Target storage for the template (e.g. 'local')"),
+        template: z
+          .string()
+          .describe("Template name from list_available_templates"),
+      },
+      annotations: WRITE,
+    },
+    async ({ node, storage, template }) =>
+      safe("download_template", async () => {
+        const task = await proxmoxPost(`/nodes/${node}/aplinfo`, {
+          storage,
+          template,
+        });
+        return (
+          `✅ Downloading template **${template}** to **${storage}** on ${node}.\n` +
+          `Task ID: \`${String(task)}\`\n\n` +
+          "Follow with `get_task_status`; then it'll appear in `list_templates`."
+        );
+      }),
+  );
+
+  server.registerTool(
+    "download_from_url",
+    {
+      title: "Download ISO/Template from URL",
+      description:
+        "Download a file from a URL directly onto a storage — typically an ISO " +
+        "(content=iso) or a container template (content=vztmpl). The storage " +
+        "must accept that content type.",
+      inputSchema: {
+        node: z.string().describe("Node name"),
+        storage: z.string().describe("Target storage (e.g. 'local')"),
+        url: z.string().url().describe("Direct download URL"),
+        content: z
+          .enum(["iso", "vztmpl"])
+          .describe("What kind of file: 'iso' or 'vztmpl' (container template)"),
+        filename: z
+          .string()
+          .optional()
+          .describe("Filename to save as. Default: derived from the URL."),
+      },
+      annotations: WRITE,
+    },
+    async ({ node, storage, url, content, filename }) =>
+      safe("download_from_url", async () => {
+        const name = filename || url.split("/").pop() || "download";
+        const task = await proxmoxPost(
+          `/nodes/${node}/storage/${storage}/download-url`,
+          { url, content, filename: name },
+        );
+        return (
+          `✅ Downloading **${name}** (${content}) from URL to **${storage}** on ${node}.\n` +
+          `Task ID: \`${String(task)}\`\n\nFollow with \`get_task_status\`.`
+        );
+      }),
+  );
+}

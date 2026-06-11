@@ -9,16 +9,24 @@ It runs over **stdio as a local subprocess**, so there is no network port, no
 bind, and no transport-auth surface. Safety comes from it being local plus the
 scope of the Proxmox API token you provide (use `PVEAuditor` for read-only).
 
-## Status — 52 tools
+## Status — 58 tools
 
-- ✅ Read tools (22): nodes, VMs, containers, storage, update check, backup list,
-  storage content (templates/ISOs/images), and task follow-up (status/log/list).
-- ✅ Write tools (30): power, snapshots, two-step delete, create, backup/restore,
-  reconfigure (`update_vm_config`/`update_container_config`), grow disks
-  (`resize_vm_disk`/`resize_container_disk`), and clone (`clone_vm`/
-  `clone_container`). Same safeguards throughout: `confirm=true` on destructive
-  ops, two-step token flows (single-use 5-min token + exact-identifier match +
-  re-verification), and the hyphenated `destroy-unreferenced-disks` param.
+- ✅ Read tools (25): nodes, VMs, containers, storage, update check, backup list,
+  storage content (templates/ISOs/images), task follow-up (status/log/list),
+  downloadable-template index, and a one-call **`cluster_review`**.
+- ✅ Write tools (33): power, snapshots, two-step delete, create, backup/restore,
+  reconfigure, grow disks, clone, **migrate** (`migrate_vm`/`migrate_container`),
+  and **downloads** (`download_template`/`download_from_url`). Same safeguards
+  throughout: `confirm=true` on destructive ops, two-step token flows (single-use
+  5-min token + exact-identifier match + re-verification), and the hyphenated
+  `destroy-unreferenced-disks` param.
+
+### `cluster_review` — the "give me a review" tool
+One read-only call that gathers cluster/quorum, per-node usage + version,
+networking (bridges/bonds), storage usage, every VM and container, **backup
+coverage** (flags running guests with no recent backup), and recent task
+failures — ending with an **⚠️ Attention** summary. Run it whenever someone asks
+for a review / health check / audit.
 
 ### Management & discovery (the "find it / follow it / change it" loop)
 - `list_templates` / `list_isos` / `list_storage_content` — discover the paths

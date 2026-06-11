@@ -18,6 +18,8 @@ import { register as registerUpdates } from "./tools/read/updates.js";
 import { register as registerBackupsList } from "./tools/read/backups.js";
 import { register as registerStorageContent } from "./tools/read/storageContent.js";
 import { register as registerTasks } from "./tools/read/tasks.js";
+import { register as registerReview } from "./tools/read/review.js";
+import { register as registerDownloads } from "./tools/write/downloads.js";
 import { register as registerVmPower } from "./tools/write/vmPower.js";
 import { register as registerContainerPower } from "./tools/write/containerPower.js";
 import { register as registerVmSnapshots } from "./tools/write/vmSnapshots.js";
@@ -31,6 +33,7 @@ import { register as registerVmRestore } from "./tools/write/vmRestore.js";
 import { register as registerVmConfig } from "./tools/write/vmConfig.js";
 import { register as registerContainerConfig } from "./tools/write/containerConfig.js";
 import { register as registerClone } from "./tools/write/clone.js";
+import { register as registerMigrate } from "./tools/write/migrate.js";
 
 export function buildServer(): McpServer {
   const server = new McpServer({ name: "clustr", version: "0.1.0" });
@@ -43,7 +46,9 @@ export function buildServer(): McpServer {
   registerBackupsList(server);
   registerStorageContent(server);
   registerTasks(server);
+  registerReview(server);
   // Write
+  registerDownloads(server);
   registerVmPower(server);
   registerContainerPower(server);
   registerVmSnapshots(server);
@@ -57,6 +62,7 @@ export function buildServer(): McpServer {
   registerVmConfig(server);
   registerContainerConfig(server);
   registerClone(server);
+  registerMigrate(server);
   return server;
 }
 
