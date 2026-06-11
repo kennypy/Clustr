@@ -1,18 +1,19 @@
 /**
  * cluster_review — one read-only call that produces a comprehensive Proxmox
- * review: cluster/quorum, per-node usage + version, networking, storage,
- * VMs, containers, backup coverage, and recent task failures. Every section is
- * best-effort (wrapped so one failing call doesn't sink the whole report), and
- * findings worth attention are collected into a summary at the end.
+ * review: cluster/quorum, per-node usage + version, disk & pool health (SMART /
+ * ZFS), networking, storage, every VM and container (with disk/uptime/onboot/
+ * agent detail), a snapshot inventory, backup coverage, and recent task
+ * failures. Every section is best-effort (wrapped so one failing call doesn't
+ * sink the report), and findings worth attention are collected into a summary.
  *
- * This is the tool to run when someone asks for a "review", "health check", or
- * "audit" of the cluster.
+ * Run this when someone asks for a "review", "health check", or "audit".
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { proxmoxGet } from "../../proxmox.js";
 import { gb, safe } from "../../safe.js";
+import { agentEnabled } from "./vms.js";
 
 const READ = {
   readOnlyHint: true,
@@ -38,15 +39,49 @@ async function tryGet<T>(path: string, query: Any | undefined, fallback: T): Pro
 
 const WEEK = 7 * 86400;
 
+interface Enriched {
+  onboot: boolean;
+  agent?: boolean; // VMs only
+  snaps: { name: string; snaptime: number }[];
+}
+
+async function enrich(g: Any): Promise<Enriched> {
+  const kind = g.type === "qemu" ? "qemu" : "lxc";
+  const base = `/nodes/${g.node}/${kind}/${g.vmid}`;
+  const [config, snaps] = await Promise.all([
+    tryGet<Any>(`${base}/config`, undefined, {}),
+    tryGet<Any[]>(`${base}/snapshot`, undefined, []),
+  ]);
+  return {
+    onboot: !!config.onboot,
+    agent: g.type === "qemu" ? agentEnabled(config.agent) : undefined,
+    snaps: snaps
+      .filter((s) => s.name !== "current")
+      .map((s) => ({ name: s.name, snaptime: Number(s.snaptime ?? 0) })),
+  };
+}
+
 async function clusterReview(): Promise<string> {
   const flags: string[] = [];
-  const out: string[] = ["# Proxmox Cluster Review", `_Generated ${dateOf(Date.now() / 1000)} UTC_\n`];
+  const out: string[] = [
+    "# Proxmox Cluster Review",
+    `_Generated ${dateOf(Date.now() / 1000)} UTC_\n`,
+  ];
 
   const resources = await tryGet<Any[]>("/cluster/resources", undefined, []);
   const nodes = resources.filter((r) => r.type === "node");
   const vms = resources.filter((r) => r.type === "qemu");
   const cts = resources.filter((r) => r.type === "lxc");
   const stores = resources.filter((r) => r.type === "storage");
+
+  // Per-guest enrichment (config + snapshots), fetched concurrently.
+  const guests = [...vms, ...cts];
+  const enriched = new Map<string, Enriched>();
+  await Promise.all(
+    guests.map(async (g) => enriched.set(`${g.type}/${g.vmid}`, await enrich(g))),
+  );
+  const enrichOf = (g: Any): Enriched =>
+    enriched.get(`${g.type}/${g.vmid}`) ?? { onboot: false, snaps: [] };
 
   // ---- Cluster -------------------------------------------------------------
   const cstatus = await tryGet<Any[]>("/cluster/status", undefined, []);
@@ -89,6 +124,39 @@ async function clusterReview(): Promise<string> {
   }
   out.push("");
 
+  // ---- Disk & pool health --------------------------------------------------
+  out.push("## Disk & pool health");
+  let anyDiskInfo = false;
+  for (const n of nodes) {
+    const disks = await tryGet<Any[]>(`/nodes/${n.node}/disks/list`, undefined, []);
+    const zpools = await tryGet<Any[]>(`/nodes/${n.node}/disks/zfs`, undefined, []);
+    if (!disks.length && !zpools.length) continue;
+    anyDiskInfo = true;
+    out.push(`### ${n.node}`);
+    for (const d of disks) {
+      const health = String(d.health ?? "unknown");
+      const wear = d.wearout !== undefined && d.wearout !== "N/A" ? ` · wearout ${d.wearout}` : "";
+      const hIcon = /pass|ok/i.test(health) ? "🟢" : /unknown/i.test(health) ? "⚪" : "🔴";
+      out.push(
+        `- ${hIcon} ${d.devpath ?? "?"} — ${d.model ?? d.type ?? "?"} — ${gb(d.size ?? 0)} GB — SMART: ${health}${wear}`,
+      );
+      if (!/pass|ok|unknown/i.test(health)) {
+        flags.push(`🔴 Disk **${d.devpath}** on ${n.node} SMART status: ${health}.`);
+      }
+    }
+    for (const z of zpools) {
+      const h = String(z.health ?? "?");
+      const zIcon = /online/i.test(h) ? "🟢" : "🔴";
+      out.push(
+        `- ${zIcon} ZFS **${z.name}** — ${h} — ${gb(z.alloc ?? 0)}/${gb(z.size ?? 0)} GB` +
+          (z.frag !== undefined ? ` · frag ${z.frag}%` : ""),
+      );
+      if (!/online/i.test(h)) flags.push(`🔴 ZFS pool **${z.name}** on ${n.node} is ${h}.`);
+    }
+  }
+  if (!anyDiskInfo) out.push("- No disk/pool detail available (token may lack Sys.Audit on node disks).");
+  out.push("");
+
   // ---- Networking ----------------------------------------------------------
   out.push("## Networking");
   for (const n of nodes) {
@@ -99,8 +167,7 @@ async function clusterReview(): Promise<string> {
     for (const i of relevant) {
       const addr = i.cidr || i.address || "no IP";
       const ports = i.bridge_ports || i.slaves || "—";
-      const active = i.active ? "active" : "inactive";
-      out.push(`- **${i.iface}** (${i.type}) — ${addr} — ports: ${ports} — ${active}`);
+      out.push(`- **${i.iface}** (${i.type}) — ${addr} — ports: ${ports} — ${i.active ? "active" : "inactive"}`);
       if (i.autostart && !i.active) {
         flags.push(`🟠 ${n.node}: bridge **${i.iface}** is set to autostart but is down.`);
       }
@@ -112,7 +179,7 @@ async function clusterReview(): Promise<string> {
   out.push("## Storage");
   const seen = new Set<string>();
   for (const s of stores) {
-    if (seen.has(s.storage)) continue; // dedupe shared storages
+    if (seen.has(s.storage)) continue;
     seen.add(s.storage);
     const usedPct = pct(s.disk ?? 0, s.maxdisk ?? 0);
     out.push(
@@ -125,13 +192,25 @@ async function clusterReview(): Promise<string> {
 
   // ---- Guests --------------------------------------------------------------
   const guestLine = (g: Any, kind: string): string => {
+    const e = enrichOf(g);
     if (g.template) return `📋 ${g.vmid} ${g.name ?? ""} (${g.node}) — ${kind} template`;
     const icon = g.status === "running" ? "🟢" : "⚫";
-    const usage =
-      g.status === "running"
-        ? ` — CPU ${Math.round((g.cpu ?? 0) * 1000) / 10}% · RAM ${gb(g.mem ?? 0)}/${gb(g.maxmem ?? 0)} GB`
-        : "";
-    return `${icon} ${g.vmid} ${g.name ?? ""} (${g.node}) — ${g.status}${usage}`;
+    const parts: string[] = [];
+    if (g.status === "running") {
+      parts.push(`CPU ${Math.round((g.cpu ?? 0) * 1000) / 10}%`);
+      parts.push(`RAM ${gb(g.mem ?? 0)}/${gb(g.maxmem ?? 0)} GB (${pct(g.mem ?? 0, g.maxmem ?? 0)}%)`);
+      // CTs report real disk usage; VMs usually only know the provisioned size.
+      parts.push(
+        g.disk > 0
+          ? `disk ${gb(g.disk)}/${gb(g.maxdisk ?? 0)} GB (${pct(g.disk, g.maxdisk ?? 0)}%)`
+          : `disk ${gb(g.maxdisk ?? 0)} GB prov.`,
+      );
+      parts.push(`up ${days(g.uptime ?? 0)}d`);
+    }
+    parts.push(`onboot ${e.onboot ? "✓" : "✗"}`);
+    if (e.agent !== undefined) parts.push(`agent ${e.agent ? "✓" : "✗"}`);
+    if (e.snaps.length) parts.push(`📸${e.snaps.length}`);
+    return `${icon} ${g.vmid} ${g.name ?? ""} (${g.node}) — ${g.status} — ${parts.join(" · ")}`;
   };
   const sortById = (a: Any, b: Any) => Number(a.vmid) - Number(b.vmid);
 
@@ -140,6 +219,9 @@ async function clusterReview(): Promise<string> {
     out.push(guestLine(v, "VM"));
     if (v.status === "running" && pct(v.mem ?? 0, v.maxmem ?? 0) > 90) {
       flags.push(`🟠 VM **${v.vmid} ${v.name ?? ""}** memory >90%.`);
+    }
+    if (v.status === "running" && enrichOf(v).agent === false) {
+      flags.push(`🟡 VM **${v.vmid} ${v.name ?? ""}** has no guest agent (degrades backups/shutdown).`);
     }
   }
   out.push("");
@@ -150,6 +232,30 @@ async function clusterReview(): Promise<string> {
       flags.push(`🟠 CT **${c.vmid} ${c.name ?? ""}** memory >90%.`);
     }
   }
+  out.push("");
+
+  // ---- Snapshots -----------------------------------------------------------
+  out.push("## Snapshots");
+  const nowSec = Date.now() / 1000;
+  let anySnap = false;
+  for (const g of guests.sort(sortById)) {
+    const e = enrichOf(g);
+    if (!e.snaps.length) continue;
+    anySnap = true;
+    const oldest = Math.min(...e.snaps.map((s) => s.snaptime || nowSec));
+    const ageDays = Math.round((nowSec - oldest) / 86400);
+    const stale = ageDays > 7;
+    out.push(
+      `- ${stale ? "⚠️ " : ""}${g.vmid} ${g.name ?? ""} — ${e.snaps.length} snapshot(s), oldest ${ageDays}d` +
+        ` (${e.snaps.map((s) => s.name).join(", ")})`,
+    );
+    if (stale) {
+      flags.push(
+        `🟡 ${g.vmid} ${g.name ?? ""} has a ${ageDays}d-old snapshot — snapshots aren't backups and bloat storage.`,
+      );
+    }
+  }
+  if (!anySnap) out.push("- No snapshots present.");
   out.push("");
 
   // ---- Backups -------------------------------------------------------------
@@ -178,14 +284,12 @@ async function clusterReview(): Promise<string> {
     `- ${totalBackups} archive(s) across ${doneStores.size} backup storage(s): ` +
       `${[...doneStores].join(", ") || "none"}.`,
   );
-  const nowSec = Date.now() / 1000;
   const stale: string[] = [];
-  for (const g of [...vms, ...cts]) {
+  for (const g of guests) {
     if (g.template || g.status !== "running") continue;
     const last = latestByVmid.get(Number(g.vmid));
     if (!last) stale.push(`${g.vmid} ${g.name ?? ""} (no backup)`);
-    else if (nowSec - last > WEEK)
-      stale.push(`${g.vmid} ${g.name ?? ""} (last ${dateOf(last)})`);
+    else if (nowSec - last > WEEK) stale.push(`${g.vmid} ${g.name ?? ""} (last ${dateOf(last)})`);
   }
   if (stale.length) {
     out.push(`- ⚠️ Running guests without a recent (<7d) backup: ${stale.join("; ")}`);
@@ -199,11 +303,7 @@ async function clusterReview(): Promise<string> {
   out.push("## Recent task failures");
   let anyFail = false;
   for (const n of nodes) {
-    const tasks = await tryGet<Any[]>(
-      `/nodes/${n.node}/tasks`,
-      { errors: 1, limit: 6 },
-      [],
-    );
+    const tasks = await tryGet<Any[]>(`/nodes/${n.node}/tasks`, { errors: 1, limit: 6 }, []);
     for (const t of tasks) {
       anyFail = true;
       out.push(
@@ -230,11 +330,12 @@ export function register(server: McpServer): void {
       title: "Review Proxmox Cluster",
       description:
         "Run a comprehensive Proxmox review in one call: cluster/quorum, per-node " +
-        "CPU/memory/disk usage and version, networking (bridges/bonds), storage " +
-        "usage, all VMs and containers, backup coverage (flags guests with no " +
-        "recent backup), and recent task failures — ending with a summary of " +
-        "things to look at. Use this whenever the user asks for a review, health " +
-        "check, audit, or overview of the cluster.",
+        "CPU/memory/disk usage and version, disk & pool health (SMART/ZFS), " +
+        "networking, storage usage, every VM and container (with disk/uptime/" +
+        "onboot/guest-agent detail), a snapshot inventory, backup coverage (flags " +
+        "guests with no recent backup), and recent task failures — ending with a " +
+        "summary of things to look at. Use this whenever the user asks for a " +
+        "review, health check, audit, or overview of the cluster.",
       annotations: READ,
     },
     async () => safe("cluster_review", clusterReview),
