@@ -9,13 +9,25 @@ It runs over **stdio as a local subprocess**, so there is no network port, no
 bind, and no transport-auth surface. Safety comes from it being local plus the
 scope of the Proxmox API token you provide (use `PVEAuditor` for read-only).
 
-## Status
+## Status — 40 tools
 
-- ✅ Read tools (15): nodes, VMs, containers, storage, update check.
-- ✅ Write tools (21): power, snapshots, two-step delete, create — full 36-tool
-  parity with the Python implementation, with the same safeguards: `confirm=true`
-  on destructive ops, two-step delete (single-use 5-min token + exact-name match
-  + reuse re-verification), and the hyphenated `destroy-unreferenced-disks` param.
+- ✅ Read tools (16): nodes, VMs, containers, storage, update check, backup list.
+- ✅ Write tools (24): power, snapshots, two-step delete, create — plus the
+  backup/restore loop below. Same safeguards throughout: `confirm=true` on
+  destructive ops, two-step token flows (single-use 5-min token + exact-identifier
+  match + re-verification), and the hyphenated `destroy-unreferenced-disks` param.
+
+### Backup & restore (makes deletion recoverable)
+- `create_vm_backup` — vzdump (mode snapshot/suspend/stop) to a backup-enabled
+  storage. Additive, no confirm.
+- `list_vm_backups` — enumerate VM archives on a storage (returns the `volid` to
+  restore from).
+- `restore_vm_request` → `restore_vm_confirm` — two-step restore via qmrestore.
+  Refuses to overwrite an existing VM unless `force=true`, refuses if the target
+  is running, and re-checks right before acting. `*_confirm` is destructive.
+
+These backup/restore tools are TypeScript-only for now (the Python build is at
+36 tools); they can be ported to Python later if needed.
 
 ## Develop
 
