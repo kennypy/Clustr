@@ -9,13 +9,25 @@ It runs over **stdio as a local subprocess**, so there is no network port, no
 bind, and no transport-auth surface. Safety comes from it being local plus the
 scope of the Proxmox API token you provide (use `PVEAuditor` for read-only).
 
-## Status — 40 tools
+## Status — 52 tools
 
-- ✅ Read tools (16): nodes, VMs, containers, storage, update check, backup list.
-- ✅ Write tools (24): power, snapshots, two-step delete, create — plus the
-  backup/restore loop below. Same safeguards throughout: `confirm=true` on
-  destructive ops, two-step token flows (single-use 5-min token + exact-identifier
-  match + re-verification), and the hyphenated `destroy-unreferenced-disks` param.
+- ✅ Read tools (22): nodes, VMs, containers, storage, update check, backup list,
+  storage content (templates/ISOs/images), and task follow-up (status/log/list).
+- ✅ Write tools (30): power, snapshots, two-step delete, create, backup/restore,
+  reconfigure (`update_vm_config`/`update_container_config`), grow disks
+  (`resize_vm_disk`/`resize_container_disk`), and clone (`clone_vm`/
+  `clone_container`). Same safeguards throughout: `confirm=true` on destructive
+  ops, two-step token flows (single-use 5-min token + exact-identifier match +
+  re-verification), and the hyphenated `destroy-unreferenced-disks` param.
+
+### Management & discovery (the "find it / follow it / change it" loop)
+- `list_templates` / `list_isos` / `list_storage_content` — discover the paths
+  that `create_container`/`create_vm` need (was previously guesswork).
+- `list_tasks` / `get_task_status` / `get_task_log` — follow up on the `UPID`
+  every write tool returns ("is it done? why did it fail?").
+- `update_vm_config` / `update_container_config` — change cores/memory/name/etc.
+- `resize_vm_disk` / `resize_container_disk` — grow disks (grow-only).
+- `clone_vm` / `clone_container` — clone a guest or template into a new ID.
 
 ### Backup & restore (makes deletion recoverable)
 - `create_vm_backup` — vzdump (mode snapshot/suspend/stop) to a backup-enabled

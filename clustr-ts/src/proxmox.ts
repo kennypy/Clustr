@@ -99,6 +99,9 @@ export function proxmoxGet(path: string, query?: Params): Promise<unknown> {
 export function proxmoxPost(path: string, body?: Params): Promise<unknown> {
   return request("POST", path, { body });
 }
+export function proxmoxPut(path: string, body?: Params): Promise<unknown> {
+  return request("PUT", path, { body });
+}
 export function proxmoxDelete(path: string, query?: Params): Promise<unknown> {
   return request("DELETE", path, { query });
 }
