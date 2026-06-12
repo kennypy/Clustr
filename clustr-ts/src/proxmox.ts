@@ -1,16 +1,24 @@
 /**
- * Proxmox API client — a thin typed wrapper over the Proxmox VE REST API.
+ * Proxmox API client — multi-endpoint.
  *
- * Authenticates with an API token (PVEAPIToken header). All non-2xx responses
- * are turned into ProxmoxError so the tool layer never leaks raw HTTP details.
- *
- * GET params go on the query string; POST/PUT bodies are form-encoded (what the
- * Proxmox API expects), matching the Python/proxmoxer behaviour — including the
- * use of literal hyphenated parameter names (e.g. "destroy-unreferenced-disks").
+ * Which endpoint a call hits is carried in an AsyncLocalStorage set per tool
+ * invocation (see runWithEndpoint), so the tool layer's proxmoxGet/Post/Put/
+ * Delete keep their simple (path, body) signatures and don't need to thread a
+ * host through every call. When nothing is set, the default endpoint is used —
+ * which is the single-host case, unchanged.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { Agent, fetch } from "undici";
-import { getConfig } from "./config.js";
+
+import {
+  defaultEndpointName,
+  endpointNames,
+  getEndpoint,
+  hasEndpoint,
+  type Endpoint,
+} from "./endpoints.js";
 
 export class ProxmoxError extends Error {
   statusCode?: number;
@@ -21,27 +29,52 @@ export class ProxmoxError extends Error {
   }
 }
 
-// Built lazily; only used when TLS verification is disabled (self-signed certs).
-let insecureDispatcher: Agent | null = null;
+// ---- endpoint routing ------------------------------------------------------
+const als = new AsyncLocalStorage<string>();
 
-function dispatcher(): Agent | undefined {
-  const cfg = getConfig();
-  if (cfg.verifySsl) return undefined;
-  if (!insecureDispatcher) {
-    insecureDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+/** Run `fn` with `name` as the active endpoint (validated). Undefined → default. */
+export function runWithEndpoint<T>(name: string | undefined, fn: () => T): T {
+  const resolved = name && name.trim() ? name.trim() : defaultEndpointName();
+  if (!hasEndpoint(resolved)) {
+    if (endpointNames().length === 0) {
+      throw new ProxmoxError(
+        "No Proxmox endpoint configured — add one with add_endpoint, or set " +
+          "PROXMOX_HOST / PROXMOX_TOKEN_NAME / PROXMOX_TOKEN_VALUE.",
+      );
+    }
+    throw new ProxmoxError(
+      `Unknown Proxmox endpoint '${resolved}'. Use list_endpoints to see configured ones.`,
+    );
   }
-  return insecureDispatcher;
+  return als.run(resolved, fn);
 }
 
-function baseUrl(): string {
-  const cfg = getConfig();
-  return `https://${cfg.host}:${cfg.port}/api2/json`;
+function currentEndpoint(): Endpoint {
+  const name = als.getStore() ?? defaultEndpointName();
+  const ep = getEndpoint(name);
+  if (!ep) {
+    throw new ProxmoxError(
+      "No Proxmox endpoint configured. Set PROXMOX_HOST/TOKEN_* (single host) or CLUSTR_ENDPOINTS (multiple).",
+    );
+  }
+  return ep;
 }
 
-function authHeader(): string {
-  const cfg = getConfig();
-  return `PVEAPIToken=${cfg.user}!${cfg.tokenName}=${cfg.tokenValue}`;
+// One undici dispatcher per endpoint that needs TLS verification disabled.
+const dispatchers = new Map<string, Agent>();
+function dispatcherFor(ep: Endpoint): Agent | undefined {
+  if (ep.verifySsl) return undefined;
+  let d = dispatchers.get(ep.name);
+  if (!d) {
+    d = new Agent({ connect: { rejectUnauthorized: false } });
+    dispatchers.set(ep.name, d);
+  }
+  return d;
 }
+
+const baseUrl = (ep: Endpoint): string => `https://${ep.host}:${ep.port}/api2/json`;
+const authHeader = (ep: Endpoint): string =>
+  `PVEAPIToken=${ep.user}!${ep.tokenName}=${ep.tokenValue}`;
 
 type Params = Record<string, string | number | boolean | undefined | null>;
 
@@ -50,14 +83,15 @@ async function request(
   path: string,
   opts: { query?: Params; body?: Params } = {},
 ): Promise<unknown> {
-  const url = new URL(baseUrl() + path);
+  const ep = currentEndpoint();
+  const url = new URL(baseUrl(ep) + path);
   if (opts.query) {
     for (const [k, v] of Object.entries(opts.query)) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
     }
   }
 
-  const headers: Record<string, string> = { Authorization: authHeader() };
+  const headers: Record<string, string> = { Authorization: authHeader(ep) };
   let body: string | undefined;
   if (opts.body) {
     const form = new URLSearchParams();
@@ -70,17 +104,16 @@ async function request(
 
   let resp;
   try {
-    resp = await fetch(url, { method, headers, body, dispatcher: dispatcher() });
+    resp = await fetch(url, { method, headers, body, dispatcher: dispatcherFor(ep) });
   } catch (err) {
-    const cfg = getConfig();
     const msg = err instanceof Error ? err.message : String(err);
-    throw new ProxmoxError(`Cannot reach Proxmox at ${cfg.host}:${cfg.port} — ${msg}`);
+    throw new ProxmoxError(`Cannot reach Proxmox '${ep.name}' at ${ep.host}:${ep.port} — ${msg}`);
   }
 
   const textBody = await resp.text();
   if (!resp.ok) {
     throw new ProxmoxError(
-      `Proxmox API error (${resp.status}): ${textBody || resp.statusText}`,
+      `Proxmox API error (${resp.status}) on '${ep.name}': ${textBody || resp.statusText}`,
       resp.status,
     );
   }

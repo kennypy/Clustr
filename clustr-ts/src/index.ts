@@ -11,6 +11,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { register as registerPrompts } from "./prompts.js";
+import { patchForMultiHost } from "./multihost.js";
+import { register as registerEndpoints } from "./tools/read/endpoints.js";
 
 import { register as registerNodes } from "./tools/read/nodes.js";
 import { register as registerVms } from "./tools/read/vms.js";
@@ -45,6 +47,15 @@ import { register as registerMigrate } from "./tools/write/migrate.js";
 
 export function buildServer(): McpServer {
   const server = new McpServer({ name: "clustr", version: "0.1.0" });
+
+  // Endpoint management registers FIRST, on the unpatched server, so these tools
+  // have no injected `host` and work even with zero endpoints configured (you
+  // need them to add the first one).
+  registerEndpoints(server);
+
+  // From here on, every tool gets an optional `host` and routes to that endpoint.
+  patchForMultiHost(server);
+
   // Read
   registerNodes(server);
   registerVms(server);

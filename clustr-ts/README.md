@@ -9,8 +9,29 @@ It runs over **stdio as a local subprocess**, so there is no network port, no
 bind, and no transport-auth surface. Safety comes from it being local plus the
 scope of the Proxmox API token you provide (use `PVEAuditor` for read-only).
 
-## Status — 68 tools
+## Multiple Proxmox clusters (multi-host)
 
+One Clustr instance can manage several clusters. The single `PROXMOX_*` fields
+are your **`default`** endpoint; add more via:
+- **`CLUSTR_ENDPOINTS`** — a JSON array: `[{"name":"office","host":"10.0.0.5","tokenName":"clustr","tokenValue":"…"}]`
+- **`CLUSTR_ENDPOINTS_FILE`** — a writable JSON file where the `add_endpoint` /
+  `remove_endpoint` tools persist runtime changes.
+
+Every tool then takes an optional **`host`** argument naming which endpoint to
+target (omit it for the default). Use `list_endpoints` to see them. Existing
+single-host setups are unchanged — `host` just defaults to the one endpoint.
+
+## Building the bundle
+
+`npm run pack` builds and packs `clustr.mcpb` with an auto-incrementing version,
+so Claude Desktop always installs it as a *new* version (no uninstall dance).
+Pass an explicit version for a release: `npm run pack -- 0.3.0`.
+
+## Status — 71 tools
+
+- ✅ **Multi-host** — manage multiple Proxmox clusters from one instance;
+  `list_endpoints` / `add_endpoint` / `remove_endpoint`, plus a `host` arg on
+  every tool. `/clustr` slash-menu prompts.
 - ✅ Read tools (35): nodes, VMs, containers, storage, update check, backup list,
   backup jobs, storage content (templates/ISOs/images), task follow-up, metrics
   history (RRD trends), pools, networking + guest IPs, pending updates + apt
