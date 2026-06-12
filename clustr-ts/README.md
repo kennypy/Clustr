@@ -27,20 +27,24 @@ single-host setups are unchanged — `host` just defaults to the one endpoint.
 so Claude Desktop always installs it as a *new* version (no uninstall dance).
 Pass an explicit version for a release: `npm run pack -- 0.3.0`.
 
-## Status — 71 tools
+## Status — 73 tools
 
 - ✅ **Multi-host** — manage multiple Proxmox clusters from one instance;
   `list_endpoints` / `add_endpoint` / `remove_endpoint`, plus a `host` arg on
   every tool. `/clustr` slash-menu prompts.
-- ✅ Read tools (35): nodes, VMs, containers, storage, update check, backup list,
-  backup jobs, storage content (templates/ISOs/images), task follow-up, metrics
-  history (RRD trends), pools, networking + guest IPs, pending updates + apt
-  repos, replication, cluster log, and a one-call **`cluster_review`**.
-- ✅ Write tools (33): power, snapshots, two-step delete, create, backup/restore,
+- ✅ Read tools (36): nodes, VMs, containers, storage, update check, backup list
+  (VM **and** container), backup jobs, storage content (templates/ISOs/images),
+  task follow-up, metrics history (RRD trends), pools, networking + guest IPs,
+  pending updates + apt repos, replication, cluster log, and a one-call
+  **`cluster_review`**.
+- ✅ Write tools (34): power, snapshots, two-step delete, create, backup/restore,
   reconfigure, grow disks, clone, **migrate**, and **downloads**. Same safeguards
   throughout: `confirm=true` on destructive ops, two-step token flows (single-use
   5-min token + exact-identifier match + re-verification), and the hyphenated
-  `destroy-unreferenced-disks` param.
+  `destroy-unreferenced-disks` param. The delete **request** step is now
+  **backup-aware** — it surfaces the node's backup-capable storages (flagging an
+  attached **PBS**) and recommends `create_*_backup` or `clone_*` before you
+  confirm, so a destructive op points at the safe option instead of hiding it.
 
 ### Coverage parity with the Proxmox UI
 Tools were added to match the *cheap* endpoints the UI reads instantly, instead
@@ -68,13 +72,17 @@ for a review / health check / audit.
 - `clone_vm` / `clone_container` — clone a guest or template into a new ID.
 
 ### Backup & restore (makes deletion recoverable)
-- `create_vm_backup` — vzdump (mode snapshot/suspend/stop) to a backup-enabled
-  storage. Additive, no confirm.
-- `list_vm_backups` — enumerate VM archives on a storage (returns the `volid` to
-  restore from).
+- `create_vm_backup` / `create_container_backup` — vzdump (mode
+  snapshot/suspend/stop) to a backup-enabled storage. Same call under the hood
+  (vzdump is guest-type-agnostic); split into VM/CT tools so the model picks the
+  right one. Additive, no confirm.
+- `list_vm_backups` / `list_container_backups` — enumerate VM or container
+  archives on a storage (returns the `volid` to restore from), across file
+  storages and PBS.
 - `restore_vm_request` → `restore_vm_confirm` — two-step restore via qmrestore.
   Refuses to overwrite an existing VM unless `force=true`, refuses if the target
   is running, and re-checks right before acting. `*_confirm` is destructive.
+  (Container restore via `pct restore` is the next parity step.)
 
 These backup/restore tools are TypeScript-only for now (the Python build is at
 36 tools); they can be ported to Python later if needed.

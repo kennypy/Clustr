@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import { ProxmoxError, proxmoxDelete, proxmoxGet } from "../../proxmox.js";
 import { safe } from "../../safe.js";
+import { backupBeforeDestroyHint } from "../../backupHints.js";
 
 const TOKEN_TTL_MS = 5 * 60 * 1000;
 
@@ -151,13 +152,15 @@ export function register(server: McpServer): void {
     async ({ node, vmid }) =>
       safe("vm_delete_request", async () => {
         const { token, name } = await requestVmDelete(node, vmid);
+        const hint = await backupBeforeDestroyHint(node, "vm");
         return (
           `⚠️ **VM Deletion Request — Step 1 of 2**\n\n` +
           `VM **${name}** (ID: ${vmid}) on node **${node}** is queued for deletion.\n\n` +
           "To permanently delete it, call `vm_delete_confirm` with:\n" +
           `- \`confirmation_token\`: \`${token}\`\n` +
           `- \`vm_name\`: \`${name}\`\n\n` +
-          "⏰ Token expires in 5 minutes. This will permanently destroy the VM and all its local disks."
+          "⏰ Token expires in 5 minutes. This will permanently destroy the VM and all its local disks." +
+          hint
         );
       }),
   );

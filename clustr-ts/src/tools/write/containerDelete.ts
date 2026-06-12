@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { ProxmoxError, proxmoxDelete, proxmoxGet } from "../../proxmox.js";
 import { safe } from "../../safe.js";
+import { backupBeforeDestroyHint } from "../../backupHints.js";
 
 const TOKEN_TTL_MS = 5 * 60 * 1000;
 
@@ -142,13 +143,15 @@ export function register(server: McpServer): void {
     async ({ node, ctid }) =>
       safe("container_delete_request", async () => {
         const { token, hostname } = await requestContainerDelete(node, ctid);
+        const hint = await backupBeforeDestroyHint(node, "container");
         return (
           `⚠️ **Container Deletion Request — Step 1 of 2**\n\n` +
           `Container **${hostname}** (ID: ${ctid}) on node **${node}** is queued for deletion.\n\n` +
           "To permanently delete it, call `container_delete_confirm` with:\n" +
           `- \`confirmation_token\`: \`${token}\`\n` +
           `- \`container_hostname\`: \`${hostname}\`\n\n` +
-          "⏰ Token expires in 5 minutes. This will permanently destroy the container and all its local storage."
+          "⏰ Token expires in 5 minutes. This will permanently destroy the container and all its local storage." +
+          hint
         );
       }),
   );
