@@ -27,7 +27,7 @@ single-host setups are unchanged — `host` just defaults to the one endpoint.
 so Claude Desktop always installs it as a *new* version (no uninstall dance).
 Pass an explicit version for a release: `npm run pack -- 0.3.0`.
 
-## Status — 73 tools
+## Status — 75 tools
 
 - ✅ **Multi-host** — manage multiple Proxmox clusters from one instance;
   `list_endpoints` / `add_endpoint` / `remove_endpoint`, plus a `host` arg on
@@ -37,7 +37,7 @@ Pass an explicit version for a release: `npm run pack -- 0.3.0`.
   task follow-up, metrics history (RRD trends), pools, networking + guest IPs,
   pending updates + apt repos, replication, cluster log, and a one-call
   **`cluster_review`**.
-- ✅ Write tools (34): power, snapshots, two-step delete, create, backup/restore,
+- ✅ Write tools (36): power, snapshots, two-step delete, create, backup/restore,
   reconfigure, grow disks, clone, **migrate**, and **downloads**. Same safeguards
   throughout: `confirm=true` on destructive ops, two-step token flows (single-use
   5-min token + exact-identifier match + re-verification), and the hyphenated
@@ -79,10 +79,14 @@ for a review / health check / audit.
 - `list_vm_backups` / `list_container_backups` — enumerate VM or container
   archives on a storage (returns the `volid` to restore from), across file
   storages and PBS.
-- `restore_vm_request` → `restore_vm_confirm` — two-step restore via qmrestore.
-  Refuses to overwrite an existing VM unless `force=true`, refuses if the target
-  is running, and re-checks right before acting. `*_confirm` is destructive.
-  (Container restore via `pct restore` is the next parity step.)
+- `restore_vm_request` → `restore_vm_confirm` (qmrestore) and
+  `restore_container_request` → `restore_container_confirm` (pct restore) —
+  two-step restore for VMs and containers. Refuses to overwrite an existing guest
+  unless `force=true`, refuses if the target is running, and re-checks right
+  before acting. `*_confirm` is destructive.
+
+Full VM/container parity: power, snapshots, delete, create, config, resize,
+clone, migrate, **backup, and restore** all have both variants.
 
 These backup/restore tools are TypeScript-only for now (the Python build is at
 36 tools); they can be ported to Python later if needed.
