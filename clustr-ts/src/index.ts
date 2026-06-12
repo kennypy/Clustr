@@ -103,6 +103,7 @@ async function main(): Promise<void> {
     // Loaded lazily so the stdio/desktop path never pulls in Express.
     const { runHttp } = await import("./http.js");
     const portArg = args[args.indexOf("--port") + 1];
+    const password = process.env.CLUSTR_AUTH_PASSWORD?.trim() || "";
     await runHttp(buildServer, {
       host: process.env.CLUSTR_HTTP_HOST?.trim() || "127.0.0.1",
       port: Number.parseInt(portArg || process.env.CLUSTR_HTTP_PORT || "8080", 10),
@@ -113,6 +114,10 @@ async function main(): Promise<void> {
         .split(",")
         .map((h) => h.trim())
         .filter(Boolean),
+      auth: password
+        ? { username: process.env.CLUSTR_AUTH_USERNAME?.trim() || "admin", password }
+        : null,
+      publicUrl: process.env.CLUSTR_PUBLIC_URL?.trim() || "",
     });
     return; // HTTP server keeps the process alive
   }

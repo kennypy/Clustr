@@ -30,14 +30,31 @@ of stdio — so it can be added to claude.ai / mobile, not just the desktop app:
 CLUSTR_TRANSPORT=http node dist/index.js     # or: node dist/index.js --http
 ```
 
-It binds **`127.0.0.1:8080`** by default and currently has **no app-level auth**
-(OAuth is the next milestone), so it **refuses a non-loopback bind** unless
-`CLUSTR_ALLOW_UNAUTHENTICATED=true`. The intended deployment is **on loopback,
-behind an authenticating front door** (Cloudflare Tunnel + Access, or a reverse
-proxy), which terminates TLS and authenticates callers. Env knobs:
-`CLUSTR_HTTP_HOST`, `CLUSTR_HTTP_PORT`, `CLUSTR_ALLOWED_HOSTS` (DNS-rebinding
-allow-list). Endpoints: `POST/GET/DELETE /mcp` and `GET /health`. stdio remains
-the default; Express is loaded only in HTTP mode.
+### Authentication (built-in OAuth)
+
+Set a login password and Clustr runs its **own OAuth 2.1 server** (PKCE +
+dynamic client registration) and protects `/mcp` with Bearer tokens — no
+external identity provider to run:
+
+```bash
+CLUSTR_TRANSPORT=http \
+CLUSTR_AUTH_PASSWORD='a-strong-password' \
+CLUSTR_PUBLIC_URL='https://clustr.example.com' \
+node dist/index.js
+```
+
+When you add the connector in Claude, it discovers the OAuth metadata, you log
+in once on Clustr's page, and you're connected. `CLUSTR_AUTH_USERNAME` defaults
+to `admin`; `CLUSTR_PUBLIC_URL` must be the public HTTPS URL behind a tunnel so
+the advertised endpoints are correct. Tokens live in process memory (a restart
+means re-login — fine for a single instance).
+
+Without a password it binds **`127.0.0.1:8080`** and **refuses a non-loopback
+bind** unless `CLUSTR_ALLOW_UNAUTHENTICATED=true` (for when an external front
+door authenticates). Other knobs: `CLUSTR_HTTP_HOST`, `CLUSTR_HTTP_PORT`,
+`CLUSTR_ALLOWED_HOSTS` (DNS-rebinding allow-list). Endpoints: `POST/GET/DELETE
+/mcp`, `GET /health`, and the OAuth routes. stdio remains the default; Express +
+OAuth load only in HTTP mode.
 
 ## Building the bundle
 

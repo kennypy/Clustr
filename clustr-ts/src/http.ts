@@ -5,10 +5,9 @@
  * Loaded only when HTTP mode is selected, so the stdio/desktop path never pulls
  * in Express. Stateful sessions (one server instance per MCP session).
  *
- * Auth note: there is NO app-level auth yet (OAuth is the next step). So this
- * binds 127.0.0.1 by default and REFUSES a non-loopback bind unless something
- * else authenticates in front (acknowledged via CLUSTR_ALLOW_UNAUTHENTICATED).
- * The intended deployment is behind a tunnel + an authenticating front door.
+ * Auth: if a login password is configured, the built-in OAuth server protects
+ * /mcp (Bearer tokens) — safe to expose behind a tunnel. Without a password it
+ * binds 127.0.0.1 and REFUSES a non-loopback bind unless explicitly overridden.
  */
 
 import { randomUUID } from "node:crypto";
@@ -18,17 +17,21 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
+import { bearerAuthMiddleware, mountOAuth, type OAuthConfig } from "./oauth.js";
+
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"]);
 
-export function assertSafeBind(host: string, allowUnauthenticated: boolean): void {
-  if (LOOPBACK.has(host) || allowUnauthenticated) return;
+export function assertSafeBind(
+  host: string,
+  allowUnauthenticated: boolean,
+  authEnabled: boolean,
+): void {
+  if (LOOPBACK.has(host) || allowUnauthenticated || authEnabled) return;
   throw new Error(
-    `Refusing to start HTTP on ${host}: Clustr has no app-level authentication ` +
-      "yet, so this would expose unauthenticated control of your cluster. Bind " +
-      "127.0.0.1 (the default) and put an authenticating reverse proxy / tunnel " +
-      "(e.g. Cloudflare Tunnel + Access) in front, or set " +
-      "CLUSTR_ALLOW_UNAUTHENTICATED=true to acknowledge that something else " +
-      "authenticates callers.",
+    `Refusing to start HTTP on ${host}: no app-level authentication. Set a login ` +
+      "(CLUSTR_AUTH_PASSWORD) to enable the built-in OAuth, or bind 127.0.0.1 and " +
+      "put an authenticating proxy/tunnel in front, or set " +
+      "CLUSTR_ALLOW_UNAUTHENTICATED=true to acknowledge an external front door.",
   );
 }
 
@@ -37,25 +40,39 @@ export interface HttpOptions {
   port: number;
   allowUnauthenticated: boolean;
   allowedHosts: string[];
+  auth: OAuthConfig | null;
+  publicUrl: string;
 }
 
 export async function runHttp(
   buildServer: () => McpServer,
   opts: HttpOptions,
 ): Promise<void> {
-  assertSafeBind(opts.host, opts.allowUnauthenticated);
+  const authEnabled = !!opts.auth?.password;
+  assertSafeBind(opts.host, opts.allowUnauthenticated, authEnabled);
 
   const app = express();
   app.use(express.json({ limit: "4mb" }));
 
   app.get("/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok", service: "clustr" });
+    res.json({ status: "ok", service: "clustr", auth: authEnabled ? "oauth" : "none" });
   });
+
+  // Public base URL used as the OAuth issuer / resource id. Behind a tunnel this
+  // must be the public HTTPS URL (CLUSTR_PUBLIC_URL); otherwise we derive a local one.
+  const displayHost = opts.host === "0.0.0.0" ? "127.0.0.1" : opts.host;
+  const baseUrl = new URL(opts.publicUrl?.trim() || `http://${displayHost}:${opts.port}`);
+
+  let bearer: express.RequestHandler[] = [];
+  if (authEnabled) {
+    const { provider } = mountOAuth(app, { baseUrl, config: opts.auth! });
+    bearer = [bearerAuthMiddleware(provider, baseUrl)];
+  }
 
   // One transport per session, kept by session id.
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
-  app.post("/mcp", async (req: Request, res: Response) => {
+  const postHandler = async (req: Request, res: Response): Promise<void> => {
     const sid = req.headers["mcp-session-id"] as string | undefined;
     let transport = sid ? transports.get(sid) : undefined;
 
@@ -85,9 +102,8 @@ export async function runHttp(
     }
 
     await transport.handleRequest(req, res, req.body);
-  });
+  };
 
-  // GET = SSE stream, DELETE = end session.
   const bySession = async (req: Request, res: Response): Promise<void> => {
     const sid = req.headers["mcp-session-id"] as string | undefined;
     const transport = sid ? transports.get(sid) : undefined;
@@ -97,17 +113,26 @@ export async function runHttp(
     }
     await transport.handleRequest(req, res);
   };
-  app.get("/mcp", bySession);
-  app.delete("/mcp", bySession);
+
+  app.post("/mcp", ...bearer, postHandler);
+  app.get("/mcp", ...bearer, bySession);
+  app.delete("/mcp", ...bearer, bySession);
 
   await new Promise<void>((resolve) => {
     app.listen(opts.port, opts.host, () => {
-      // stderr so it never corrupts a stdio peer if misconfigured.
-      console.error(`Clustr HTTP transport listening on ${opts.host}:${opts.port}/mcp`);
-      if (!LOOPBACK.has(opts.host)) {
+      console.error(
+        `Clustr HTTP transport on ${opts.host}:${opts.port}/mcp ` +
+          `(auth: ${authEnabled ? "OAuth" : "NONE"})`,
+      );
+      if (!LOOPBACK.has(opts.host) && !authEnabled) {
         console.error(
-          "WARNING: bound to a non-loopback address with no app-level auth — " +
-            "ensure an authenticating proxy/tunnel is in front.",
+          "WARNING: non-loopback with no app-level auth — ensure a front door authenticates.",
+        );
+      }
+      if (authEnabled && !opts.publicUrl) {
+        console.error(
+          "NOTE: CLUSTR_PUBLIC_URL not set; OAuth metadata advertises " +
+            `${baseUrl.origin}. Behind a tunnel, set CLUSTR_PUBLIC_URL to the public HTTPS URL.`,
         );
       }
       resolve();
