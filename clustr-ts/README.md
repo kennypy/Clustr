@@ -24,7 +24,9 @@ single-host setups are unchanged — `host` just defaults to the one endpoint.
 ## Remote mode (HTTP transport)
 
 The same build can run as a **remote MCP connector** over Streamable HTTP instead
-of stdio — so it can be added to claude.ai / mobile, not just the desktop app:
+of stdio — so it can be added to claude.ai / mobile, not just the desktop app.
+For the full self-host deployment (Docker + Cloudflare Tunnel), see
+**[SELF_HOST.md](SELF_HOST.md)**.
 
 ```bash
 CLUSTR_TRANSPORT=http node dist/index.js     # or: node dist/index.js --http
