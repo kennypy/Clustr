@@ -10,6 +10,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { register as registerPrompts } from "./prompts.js";
+
 import { register as registerNodes } from "./tools/read/nodes.js";
 import { register as registerVms } from "./tools/read/vms.js";
 import { register as registerContainers } from "./tools/read/containers.js";
@@ -59,6 +61,8 @@ export function buildServer(): McpServer {
   registerNetwork(server);
   registerCluster(server);
   registerReview(server);
+  // Slash-menu prompts (/clustr)
+  registerPrompts(server);
   // Write
   registerDownloads(server);
   registerVmPower(server);
