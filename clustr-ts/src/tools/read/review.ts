@@ -14,6 +14,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { proxmoxGet } from "../../proxmox.js";
 import { gb, safe } from "../../safe.js";
 import { agentEnabled } from "./vms.js";
+import { jobCoverage } from "./backupJobs.js";
 
 const READ = {
   readOnlyHint: true,
@@ -35,6 +36,15 @@ async function tryGet<T>(path: string, query: Any | undefined, fallback: T): Pro
   } catch {
     return fallback;
   }
+}
+
+/** Resolve to `fallback` if `p` doesn't settle within `ms` (keeps slow stores
+ * like PBS from hanging the whole review). */
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
 }
 
 const WEEK = 7 * 86400;
@@ -259,19 +269,62 @@ async function clusterReview(): Promise<string> {
   out.push("");
 
   // ---- Backups -------------------------------------------------------------
+  // Coverage comes from the *job config* (/cluster/backup) — instant, and the
+  // right answer to "is it backed up on a schedule". Archive ages are a
+  // best-effort extra, timeout-bounded so a PBS chunk-store walk can't hang the
+  // whole review (it previously took minutes).
   out.push("## Backups");
+  const jobs = await tryGet<Any[]>("/cluster/backup", undefined, []);
+  const enabledJobs = jobs.filter((j) => j.enabled !== 0);
+  if (!jobs.length) {
+    out.push("- ⚠️ No scheduled backup jobs configured (Datacenter → Backup is empty).");
+    flags.push("🔴 No scheduled backup jobs exist — nothing is being backed up automatically.");
+  } else {
+    out.push(
+      `- ${jobs.length} backup job(s), ${enabledJobs.length} enabled: ` +
+        enabledJobs
+          .map((j) => `${j.id ?? "job"}→${j.storage ?? "?"} (${j.all ? "all" : j.vmid ? j.vmid : j.pool ? `pool ${j.pool}` : "?"})`)
+          .join("; "),
+    );
+  }
+
+  // Job-based coverage of running guests (fast, authoritative for intent).
+  const cov = jobCoverage(jobs as any);
+  const uncovered: string[] = [];
+  for (const g of guests) {
+    if (g.template || g.status !== "running") continue;
+    const id = Number(g.vmid);
+    const covered = (cov.all && !cov.allExcludes.has(id)) || cov.vmids.has(id);
+    if (!covered && !cov.hasPoolJob) uncovered.push(`${id} ${g.name ?? ""}`);
+  }
+  if (uncovered.length) {
+    out.push(`- ⚠️ Running guests not covered by any backup job: ${uncovered.join("; ")}`);
+    flags.push(`🟠 ${uncovered.length} running guest(s) are in no backup job.`);
+  } else if (enabledJobs.length) {
+    out.push(
+      "- ✅ Every running guest is covered by a backup job" +
+        (cov.hasPoolJob ? " (some via a pool job)." : "."),
+    );
+  }
+
+  // Archive ages — best-effort, each storage capped so PBS can't stall us.
   const backupStores = stores.filter((s) => String(s.content ?? "").includes("backup"));
   const latestByVmid = new Map<number, number>();
   let totalBackups = 0;
+  let timedOut = false;
   const doneStores = new Set<string>();
   for (const s of backupStores) {
     if (doneStores.has(s.storage)) continue;
     doneStores.add(s.storage);
-    const rows = await tryGet<Any[]>(
-      `/nodes/${s.node}/storage/${s.storage}/content`,
-      { content: "backup" },
-      [],
+    const rows = await withTimeout(
+      tryGet<Any[]>(`/nodes/${s.node}/storage/${s.storage}/content`, { content: "backup" }, []),
+      12000,
+      null,
     );
+    if (rows === null) {
+      timedOut = true;
+      continue;
+    }
     totalBackups += rows.length;
     for (const r of rows) {
       const id = Number(r.vmid);
@@ -280,22 +333,18 @@ async function clusterReview(): Promise<string> {
       if ((r.ctime ?? 0) > prev) latestByVmid.set(id, r.ctime ?? 0);
     }
   }
-  out.push(
-    `- ${totalBackups} archive(s) across ${doneStores.size} backup storage(s): ` +
-      `${[...doneStores].join(", ") || "none"}.`,
-  );
-  const stale: string[] = [];
-  for (const g of guests) {
-    if (g.template || g.status !== "running") continue;
-    const last = latestByVmid.get(Number(g.vmid));
-    if (!last) stale.push(`${g.vmid} ${g.name ?? ""} (no backup)`);
-    else if (nowSec - last > WEEK) stale.push(`${g.vmid} ${g.name ?? ""} (last ${dateOf(last)})`);
+  if (latestByVmid.size) {
+    const old: string[] = [];
+    for (const g of guests) {
+      if (g.template || g.status !== "running") continue;
+      const last = latestByVmid.get(Number(g.vmid));
+      if (last && nowSec - last > WEEK) old.push(`${g.vmid} ${g.name ?? ""} (last ${dateOf(last)})`);
+    }
+    out.push(`- ${totalBackups} archive(s) found across ${doneStores.size} storage(s).`);
+    if (old.length) out.push(`- ⚠️ Newest backup is >7d old for: ${old.join("; ")}`);
   }
-  if (stale.length) {
-    out.push(`- ⚠️ Running guests without a recent (<7d) backup: ${stale.join("; ")}`);
-    flags.push(`🟠 ${stale.length} running guest(s) lack a recent backup.`);
-  } else if (totalBackups > 0) {
-    out.push("- ✅ All running guests have a backup within the last 7 days.");
+  if (timedOut) {
+    out.push("- (Archive enumeration timed out on a slow store, e.g. PBS — coverage above is from job config.)");
   }
   out.push("");
 
