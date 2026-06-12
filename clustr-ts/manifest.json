@@ -22,7 +22,9 @@
         "PROXMOX_TOKEN_NAME": "${user_config.proxmox_token_name}",
         "PROXMOX_TOKEN_VALUE": "${user_config.proxmox_token_value}",
         "PROXMOX_PORT": "${user_config.proxmox_port}",
-        "PROXMOX_VERIFY_SSL": "${user_config.proxmox_verify_ssl}"
+        "PROXMOX_VERIFY_SSL": "${user_config.proxmox_verify_ssl}",
+        "CLUSTR_ENDPOINTS": "${user_config.extra_endpoints_json}",
+        "CLUSTR_ENDPOINTS_FILE": "${user_config.endpoints_file}"
       }
     }
   },
@@ -65,6 +67,18 @@
       "title": "Verify TLS certificate",
       "description": "Leave off for Proxmox's default self-signed certificate.",
       "default": false,
+      "required": false
+    },
+    "extra_endpoints_json": {
+      "type": "string",
+      "title": "Additional clusters (advanced, optional)",
+      "description": "Manage more than one Proxmox cluster: a JSON array of extra endpoints, e.g. [{\"name\":\"office\",\"host\":\"10.0.0.5\",\"tokenName\":\"clustr\",\"tokenValue\":\"…\"}]. Target one with the 'host' argument on any tool. The host above stays your 'default'.",
+      "required": false
+    },
+    "endpoints_file": {
+      "type": "string",
+      "title": "Endpoints file (advanced, optional)",
+      "description": "Path to a writable JSON file where add_endpoint / remove_endpoint persist runtime changes (so they survive restarts), e.g. C:\\\\Users\\\\you\\\\clustr-endpoints.json.",
       "required": false
     }
   },
