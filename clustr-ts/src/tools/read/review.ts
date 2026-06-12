@@ -15,6 +15,7 @@ import { proxmoxGet } from "../../proxmox.js";
 import { gb, safe } from "../../safe.js";
 import { agentEnabled } from "./vms.js";
 import { jobCoverage } from "./backupJobs.js";
+import { pendingUpdates } from "./apt.js";
 
 const READ = {
   readOnlyHint: true,
@@ -49,6 +50,29 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 
 const WEEK = 7 * 86400;
 
+/** avg & peak (as %) of an rrddata series. If `total` is given, computes
+ * used/total %; otherwise treats `used` as a 0..1 fraction (e.g. cpu). */
+function avgPeak(
+  rrd: Any[],
+  used: string,
+  total?: string,
+): { avg: number; peak: number } {
+  const s = rrd
+    .map((p) =>
+      total
+        ? Number(p[total]) > 0
+          ? (Number(p[used]) / Number(p[total])) * 100
+          : NaN
+        : Number(p[used]) * 100,
+    )
+    .filter((v) => Number.isFinite(v));
+  if (!s.length) return { avg: 0, peak: 0 };
+  return {
+    avg: Math.round((s.reduce((a, b) => a + b, 0) / s.length) * 10) / 10,
+    peak: Math.round(Math.max(...s) * 10) / 10,
+  };
+}
+
 interface Enriched {
   onboot: boolean;
   agent?: boolean; // VMs only
@@ -73,6 +97,7 @@ async function enrich(g: Any): Promise<Enriched> {
 
 async function clusterReview(): Promise<string> {
   const flags: string[] = [];
+  const nowSec = Date.now() / 1000;
   const out: string[] = [
     "# Proxmox Cluster Review",
     `_Generated ${dateOf(Date.now() / 1000)} UTC_\n`,
@@ -131,6 +156,46 @@ async function clusterReview(): Promise<string> {
     if (cpuPct > 85) flags.push(`🟠 Node **${n.node}** CPU ${cpuPct}%.`);
     if (memPct > 85) flags.push(`🟠 Node **${n.node}** memory ${memPct}%.`);
     if (diskPct > 90) flags.push(`🔴 Node **${n.node}** root disk ${diskPct}% full.`);
+
+    // 24h trend (the UI graphs) so "high right now" can become "high for a day".
+    const rrd = await tryGet<Any[]>(
+      `/nodes/${n.node}/rrddata`,
+      { timeframe: "day", cf: "AVERAGE" },
+      [],
+    );
+    if (rrd.length) {
+      const c = avgPeak(rrd, "cpu");
+      const m = avgPeak(rrd, "memused", "memtotal");
+      out.push(
+        `   ↳ 24h: CPU avg ${c.avg}% peak ${c.peak}% · RAM avg ${m.avg}% peak ${m.peak}%`,
+      );
+      if (m.avg > 85) flags.push(`🟠 Node **${n.node}** RAM has averaged ${m.avg}% over 24h (sustained).`);
+    }
+  }
+  out.push("");
+
+  // ---- Updates & certificates ---------------------------------------------
+  out.push("## Updates & certificates");
+  for (const n of nodes) {
+    try {
+      const { count, notable } = await pendingUpdates(n.node);
+      out.push(
+        `- **${n.node}** updates: ${count === 0 ? "✅ up to date" : `⬆️ ${count} pending`}` +
+          (notable.length ? ` (incl. ${notable.join(", ")} — reboot)` : ""),
+      );
+      if (notable.length) flags.push(`🟡 ${n.node}: kernel/PVE update pending (reboot to apply).`);
+    } catch {
+      out.push(`- **${n.node}** updates: (couldn't read /apt/update)`);
+    }
+    const certs = await tryGet<Any[]>(`/nodes/${n.node}/certificates/info`, undefined, []);
+    for (const c of certs) {
+      if (!c.notAfter) continue;
+      const left = Math.round((Number(c.notAfter) - nowSec) / 86400);
+      if (left < 60) {
+        out.push(`   - cert \`${c.filename ?? "?"}\` expires in ${left}d (${dateOf(c.notAfter)})`);
+        if (left < 30) flags.push(`🟠 ${n.node}: TLS cert \`${c.filename}\` expires in ${left}d.`);
+      }
+    }
   }
   out.push("");
 
@@ -246,7 +311,6 @@ async function clusterReview(): Promise<string> {
 
   // ---- Snapshots -----------------------------------------------------------
   out.push("## Snapshots");
-  const nowSec = Date.now() / 1000;
   let anySnap = false;
   for (const g of guests.sort(sortById)) {
     const e = enrichOf(g);
