@@ -17,6 +17,7 @@ import { fetch } from "undici";
 
 import { proxmoxGet } from "../../proxmox.js";
 import { safe } from "../../safe.js";
+import { pendingUpdates } from "./apt.js";
 
 const READ = {
   readOnlyHint: true,
@@ -98,10 +99,11 @@ export function register(server: McpServer): void {
     {
       title: "Check for Proxmox Updates",
       description:
-        "Check whether the connected Proxmox cluster is running the latest " +
-        "release. Compares the running version (from the Proxmox API) to the " +
-        "latest pve-manager in Proxmox's APT repository for the cluster's " +
-        "release track. Best-effort if the index cannot be reached.",
+        "Check for Proxmox updates. Leads with the LOCAL pending-package count " +
+        "per node (the Node → Updates panel — instant, no internet from this " +
+        "tool) and highlights kernel/PVE updates. Also makes a best-effort " +
+        "comparison to the latest release on your track via the public package " +
+        "index (skipped cleanly if that can't be reached).",
       annotations: READ,
     },
     async () =>
@@ -109,37 +111,40 @@ export function register(server: McpServer): void {
         const v = (await proxmoxGet("/version")) as Record<string, any>;
         const runningVer = String(v.version ?? v.release ?? "unknown");
         const runningT = versionTuple(runningVer);
+        const lines = ["## Proxmox Update Check\n", `**Running version:** ${runningVer}\n`];
 
-        const lines = ["## Proxmox Update Check\n", `**Running version:** ${runningVer}`];
-        if (!runningT.length) {
-          lines.push(`\nCould not parse the running version. Check ${ROADMAP_URL}.`);
-          return lines.join("\n");
+        // Primary, local, reliable: pending APT updates per node.
+        const nodes = (await proxmoxGet("/nodes")) as Record<string, any>[];
+        lines.push("**Pending package updates (local):**");
+        for (const n of nodes) {
+          try {
+            const { count, notable } = await pendingUpdates(String(n.node));
+            if (count === 0) lines.push(`- ${n.node}: ✅ up to date`);
+            else
+              lines.push(
+                `- ${n.node}: ⬆️ ${count} pending` +
+                  (notable.length ? ` (incl. ${notable.join(", ")} — reboot likely)` : ""),
+              );
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            lines.push(`- ${n.node}: could not read pending updates (${msg})`);
+          }
         }
 
-        const { version: latestVer, error } = await latestOnTrack(runningT[0]);
-        if (error) {
-          lines.push(`**Latest release:** unavailable — ${error}`);
-          lines.push(
-            `\nThe running version above is from your cluster. The latest-release ` +
-              `lookup is best-effort and needs outbound access to ` +
-              `download.proxmox.com. See ${ROADMAP_URL}.`,
-          );
-          return lines.join("\n");
+        // Secondary, best-effort: latest-on-track from the public index.
+        if (runningT.length) {
+          const { version: latestVer, error } = await latestOnTrack(runningT[0]);
+          if (!error && latestVer) {
+            lines.push(
+              `\n**Latest on your track (pve-no-subscription):** ${latestVer}` +
+                (isLess(runningT, versionTuple(latestVer))
+                  ? ` — ⬆️ newer than your ${runningVer}.`
+                  : " — you're current."),
+            );
+          }
+          // If the external lookup failed, we simply omit it — the local count above is the answer.
         }
-
-        lines.push(`**Latest on your track (pve-no-subscription):** ${latestVer}`);
-        if (isLess(runningT, versionTuple(latestVer))) {
-          lines.push(
-            `\n⬆️ **An update is available** — ${runningVer} → ${latestVer}. ` +
-              `Run \`apt update && apt full-upgrade\` on each node (read the ` +
-              `upgrade notes first). For a new major release, see ${ROADMAP_URL}.`,
-          );
-        } else {
-          lines.push(
-            `\n✅ You are on the latest release for this track (${latestVer}). ` +
-              `New major releases are announced separately — see ${ROADMAP_URL}.`,
-          );
-        }
+        lines.push("\nRun `apt update && apt full-upgrade` on a node to apply (read upgrade notes first).");
         return lines.join("\n");
       }),
   );

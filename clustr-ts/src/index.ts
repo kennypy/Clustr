@@ -19,6 +19,11 @@ import { register as registerBackupsList } from "./tools/read/backups.js";
 import { register as registerStorageContent } from "./tools/read/storageContent.js";
 import { register as registerTasks } from "./tools/read/tasks.js";
 import { register as registerBackupJobs } from "./tools/read/backupJobs.js";
+import { register as registerApt } from "./tools/read/apt.js";
+import { register as registerMetrics } from "./tools/read/metrics.js";
+import { register as registerPools } from "./tools/read/pools.js";
+import { register as registerNetwork } from "./tools/read/network.js";
+import { register as registerCluster } from "./tools/read/cluster.js";
 import { register as registerReview } from "./tools/read/review.js";
 import { register as registerDownloads } from "./tools/write/downloads.js";
 import { register as registerVmPower } from "./tools/write/vmPower.js";
@@ -48,6 +53,11 @@ export function buildServer(): McpServer {
   registerStorageContent(server);
   registerTasks(server);
   registerBackupJobs(server);
+  registerApt(server);
+  registerMetrics(server);
+  registerPools(server);
+  registerNetwork(server);
+  registerCluster(server);
   registerReview(server);
   // Write
   registerDownloads(server);

@@ -9,17 +9,26 @@ It runs over **stdio as a local subprocess**, so there is no network port, no
 bind, and no transport-auth surface. Safety comes from it being local plus the
 scope of the Proxmox API token you provide (use `PVEAuditor` for read-only).
 
-## Status — 58 tools
+## Status — 68 tools
 
-- ✅ Read tools (25): nodes, VMs, containers, storage, update check, backup list,
-  storage content (templates/ISOs/images), task follow-up (status/log/list),
-  downloadable-template index, and a one-call **`cluster_review`**.
+- ✅ Read tools (35): nodes, VMs, containers, storage, update check, backup list,
+  backup jobs, storage content (templates/ISOs/images), task follow-up, metrics
+  history (RRD trends), pools, networking + guest IPs, pending updates + apt
+  repos, replication, cluster log, and a one-call **`cluster_review`**.
 - ✅ Write tools (33): power, snapshots, two-step delete, create, backup/restore,
-  reconfigure, grow disks, clone, **migrate** (`migrate_vm`/`migrate_container`),
-  and **downloads** (`download_template`/`download_from_url`). Same safeguards
+  reconfigure, grow disks, clone, **migrate**, and **downloads**. Same safeguards
   throughout: `confirm=true` on destructive ops, two-step token flows (single-use
   5-min token + exact-identifier match + re-verification), and the hyphenated
   `destroy-unreferenced-disks` param.
+
+### Coverage parity with the Proxmox UI
+Tools were added to match the *cheap* endpoints the UI reads instantly, instead
+of brute-forcing: `list_backup_jobs` (`/cluster/backup`), `list_node_updates`
+(`/apt/update`, local — no internet), `get_metrics_history` (RRD graphs),
+`list_pools`/`get_pool`, `list_networks`/`get_guest_ips`, `list_replication`,
+`get_cluster_log`. `check_proxmox_updates` now leads with the local apt count
+(the roadmap comparison is a best-effort extra). `cluster_review` folds in 24h
+node trends, pending updates, and TLS-cert expiry.
 
 ### `cluster_review` — the "give me a review" tool
 One read-only call that gathers cluster/quorum, per-node usage + version,
