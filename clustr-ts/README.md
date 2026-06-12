@@ -21,6 +21,24 @@ Every tool then takes an optional **`host`** argument naming which endpoint to
 target (omit it for the default). Use `list_endpoints` to see them. Existing
 single-host setups are unchanged — `host` just defaults to the one endpoint.
 
+## Remote mode (HTTP transport)
+
+The same build can run as a **remote MCP connector** over Streamable HTTP instead
+of stdio — so it can be added to claude.ai / mobile, not just the desktop app:
+
+```bash
+CLUSTR_TRANSPORT=http node dist/index.js     # or: node dist/index.js --http
+```
+
+It binds **`127.0.0.1:8080`** by default and currently has **no app-level auth**
+(OAuth is the next milestone), so it **refuses a non-loopback bind** unless
+`CLUSTR_ALLOW_UNAUTHENTICATED=true`. The intended deployment is **on loopback,
+behind an authenticating front door** (Cloudflare Tunnel + Access, or a reverse
+proxy), which terminates TLS and authenticates callers. Env knobs:
+`CLUSTR_HTTP_HOST`, `CLUSTR_HTTP_PORT`, `CLUSTR_ALLOWED_HOSTS` (DNS-rebinding
+allow-list). Endpoints: `POST/GET/DELETE /mcp` and `GET /health`. stdio remains
+the default; Express is loaded only in HTTP mode.
+
 ## Building the bundle
 
 `npm run pack` builds and packs `clustr.mcpb` with an auto-incrementing version,
