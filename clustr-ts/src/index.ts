@@ -39,6 +39,7 @@ import { register as registerContainerDelete } from "./tools/write/containerDele
 import { register as registerVmCreate } from "./tools/write/vmCreate.js";
 import { register as registerContainerCreate } from "./tools/write/containerCreate.js";
 import { register as registerVmBackup } from "./tools/write/vmBackup.js";
+import { register as registerContainerBackup } from "./tools/write/containerBackup.js";
 import { register as registerVmRestore } from "./tools/write/vmRestore.js";
 import { register as registerVmConfig } from "./tools/write/vmConfig.js";
 import { register as registerContainerConfig } from "./tools/write/containerConfig.js";
@@ -85,6 +86,7 @@ export function buildServer(): McpServer {
   registerVmCreate(server);
   registerContainerCreate(server);
   registerVmBackup(server);
+  registerContainerBackup(server);
   registerVmRestore(server);
   registerVmConfig(server);
   registerContainerConfig(server);
