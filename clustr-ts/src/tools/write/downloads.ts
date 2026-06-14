@@ -21,6 +21,20 @@ const READ = {
 } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
 
+/**
+ * Reduce a requested/derived download filename to a single safe path segment:
+ * strip any directory parts and traversal so it can't point outside the target
+ * storage (Proxmox validates too — this is defense-in-depth). Exported for tests.
+ */
+export function sanitizeDownloadName(raw: string): string {
+  const base = raw.split(/[/\\]/).pop() ?? "";
+  const cleaned = base
+    .replace(/[^A-Za-z0-9._+-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^\.+/, "");
+  return cleaned || "download";
+}
+
 interface ApiTemplate {
   template?: string;
   os?: string;
@@ -132,7 +146,7 @@ export function register(server: McpServer): void {
     },
     async ({ node, storage, url, content, filename }) =>
       safe("download_from_url", async () => {
-        const name = filename || url.split("/").pop() || "download";
+        const name = sanitizeDownloadName(filename || url.split("/").pop() || "download");
         const task = await proxmoxPost(
           `/nodes/${node}/storage/${storage}/download-url`,
           { url, content, filename: name },

@@ -20,6 +20,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { bearerAuthMiddleware, mountOAuth, type OAuthConfig } from "./oauth.js";
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"]);
+const MAX_SESSIONS = 256;
 
 export function assertSafeBind(
   host: string,
@@ -93,6 +94,16 @@ export async function runHttp(
         res.status(400).json({
           jsonrpc: "2.0",
           error: { code: -32000, message: "Bad Request: no valid session" },
+          id: null,
+        });
+        return;
+      }
+      // Cap concurrent sessions so a client can't exhaust memory by opening
+      // sessions without ever closing them. Sessions are freed on close.
+      if (transports.size >= MAX_SESSIONS) {
+        res.status(503).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Too many active sessions; retry later." },
           id: null,
         });
         return;
