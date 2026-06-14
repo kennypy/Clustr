@@ -74,6 +74,9 @@ export function register(server: McpServer): void {
     },
     async ({ node: n, vmid: id, snapname, confirm: ok }) =>
       safe("delete_vm_snapshot", async () => {
+        if (!SNAP_NAME.test(snapname)) {
+          return "Error: invalid snapshot name (alphanumeric, hyphens/underscores, max 40).";
+        }
         if (!ok) {
           return needsConfirm(
             "delete snapshot",
@@ -104,6 +107,9 @@ export function register(server: McpServer): void {
     },
     async ({ node: n, vmid: id, snapname, confirm: ok }) =>
       safe("rollback_vm_snapshot", async () => {
+        if (!SNAP_NAME.test(snapname)) {
+          return "Error: invalid snapshot name (alphanumeric, hyphens/underscores, max 40).";
+        }
         if (!ok) {
           return needsConfirm(
             "roll back to snapshot",
