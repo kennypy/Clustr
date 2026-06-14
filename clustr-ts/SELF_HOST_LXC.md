@@ -193,6 +193,13 @@ appear after the rebuild + restart.)
   reads).
 - Binding `127.0.0.1` means Clustr is reachable **only** through the authenticated tunnel
   and from inside the LXC — never exposed on your LAN.
+- **DNS-rebinding protection is on by default:** `/mcp` only accepts requests whose `Host`
+  matches your `CLUSTR_PUBLIC_URL`. If your tunnel rewrites the `Host` header (rare) and
+  the connector can't reach `/mcp`, set `CLUSTR_ALLOWED_HOSTS` to the host(s) it actually
+  sends, or to override.
+- **Sign-in shows a consent line** — which app is connecting and where it will redirect —
+  so a crafted authorize link is visible before you type the password. Only continue if you
+  started the connection from Claude.
 
 ## Alternative: Docker instead of systemd
 If you'd rather use the bundled `Dockerfile` + `docker-compose.yml` (Clustr + cloudflared

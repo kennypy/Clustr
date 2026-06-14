@@ -26,21 +26,57 @@ function asBool(v: unknown): boolean {
   return /^(1|true|yes|on)$/i.test(String(v ?? "").trim());
 }
 
-function normalize(e: Record<string, any>): Endpoint {
+const hasControlChars = (s: string): boolean => {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c <= 0x1f || c === 0x7f) return true;
+  }
+  return false;
+};
+
+/**
+ * Validate + coerce an endpoint. The host is interpolated raw into
+ * `https://${host}:${port}/...` and the token fields into the `Authorization`
+ * header, so unvalidated input here is a token-exfiltration / SSRF / header-
+ * injection primitive: a host like `attacker.com/` or `a@evil.com` makes
+ * `new URL()` resolve to a different host and the API token rides along. Lock
+ * the host to a bare hostname / IPv4 / [IPv6], and reject control chars in the
+ * header-bound fields. Exported for tests.
+ */
+export function normalize(e: Record<string, any>): Endpoint {
   if (!e.name || !e.host || !e.tokenName || !e.tokenValue) {
     throw new Error(
       "Each endpoint needs name, host, tokenName, tokenValue (user/port/verifySsl optional).",
     );
   }
-  return {
-    name: String(e.name),
-    host: String(e.host),
-    port: Number(e.port ?? 8006),
-    user: String(e.user ?? "root@pam"),
-    tokenName: String(e.tokenName),
-    tokenValue: String(e.tokenValue),
-    verifySsl: asBool(e.verifySsl),
-  };
+  const host = String(e.host).trim();
+  // Bare hostname / IPv4, or a bracketed IPv6 literal. Nothing that could carry
+  // a scheme, path, userinfo (`@`), query/fragment, or an embedded port.
+  if (!/^[A-Za-z0-9.-]+$/.test(host) && !/^\[[0-9A-Fa-f:]+\]$/.test(host)) {
+    throw new Error(
+      `Invalid endpoint host '${host}': use a bare hostname, IPv4, or [IPv6] — ` +
+        "no scheme, path, '@', or embedded port.",
+    );
+  }
+  const port = Number(e.port ?? 8006);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid endpoint port '${String(e.port)}': must be an integer 1–65535.`);
+  }
+  const name = String(e.name);
+  const user = String(e.user ?? "root@pam");
+  const tokenName = String(e.tokenName);
+  const tokenValue = String(e.tokenValue);
+  for (const [field, val] of [
+    ["name", name],
+    ["user", user],
+    ["tokenName", tokenName],
+    ["tokenValue", tokenValue],
+  ] as const) {
+    if (hasControlChars(val)) {
+      throw new Error(`Endpoint ${field} contains control characters.`);
+    }
+  }
+  return { name, host, port, user, tokenName, tokenValue, verifySsl: asBool(e.verifySsl) };
 }
 
 function singleFromEnv(): Endpoint | null {

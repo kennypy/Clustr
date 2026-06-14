@@ -76,6 +76,25 @@ const baseUrl = (ep: Endpoint): string => `https://${ep.host}:${ep.port}/api2/js
 const authHeader = (ep: Endpoint): string =>
   `PVEAPIToken=${ep.user}!${ep.tokenName}=${ep.tokenValue}`;
 
+/**
+ * Reject API paths that try to escape the intended endpoint via traversal or
+ * control characters. Tool-supplied identifiers (node names, storage, etc.) are
+ * interpolated into `path`; a `..` segment would let `new URL()` normalise the
+ * request onto a different API path. Same-host and token-scoped, so impact is
+ * low, but cheap to close centrally. Exported pure for tests.
+ */
+export function assertSafeApiPath(path: string): void {
+  for (let i = 0; i < path.length; i++) {
+    const c = path.charCodeAt(i);
+    if (c <= 0x1f || c === 0x7f) {
+      throw new ProxmoxError("Refusing request: control character in API path.");
+    }
+  }
+  if (path.split(/[/\\]/).some((seg) => seg === "..")) {
+    throw new ProxmoxError("Refusing request: path traversal segment in API path.");
+  }
+}
+
 type Params = Record<string, string | number | boolean | undefined | null>;
 
 async function request(
@@ -83,6 +102,7 @@ async function request(
   path: string,
   opts: { query?: Params; body?: Params } = {},
 ): Promise<unknown> {
+  assertSafeApiPath(path);
   const ep = currentEndpoint();
   const url = new URL(baseUrl(ep) + path);
   if (opts.query) {
