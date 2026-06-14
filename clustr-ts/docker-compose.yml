@@ -1,0 +1,31 @@
+# Self-hosted remote Clustr: the connector + a Cloudflare Tunnel in front.
+# Clustr authenticates callers with its own built-in OAuth (CLUSTR_AUTH_PASSWORD),
+# so the tunnel just needs to route your hostname to it — no Cloudflare Access
+# service-token gymnastics required.
+#
+#   1. cp .env.example .env  &&  fill it in (Proxmox token, a strong
+#      CLUSTR_AUTH_PASSWORD, your CLUSTR_PUBLIC_URL, and a TUNNEL_TOKEN).
+#   2. In the Cloudflare dashboard, point your tunnel's public hostname at
+#      http://clustr:8080.
+#   3. docker compose up -d
+#   4. Add the public URL as a custom connector in Claude; log in with your password.
+
+services:
+  clustr:
+    build: .
+    container_name: clustr
+    restart: unless-stopped
+    env_file: .env
+    # No host port published — cloudflared reaches it over the internal network.
+    expose:
+      - "8080"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: clustr-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - clustr

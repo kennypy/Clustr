@@ -21,6 +21,20 @@ Every tool then takes an optional **`host`** argument naming which endpoint to
 target (omit it for the default). Use `list_endpoints` to see them. Existing
 single-host setups are unchanged — `host` just defaults to the one endpoint.
 
+## Remote mode (phone + web)
+
+The same build runs as a **remote MCP connector** over Streamable HTTP, so it can be
+added to claude.ai and the **mobile app** — not just the desktop extension. Set
+`CLUSTR_TRANSPORT=http` and a `CLUSTR_AUTH_PASSWORD`, and Clustr runs its **own OAuth 2.1
+server** (PKCE + dynamic client registration) and protects `/mcp` with Bearer tokens — no
+external identity provider. Stdio stays the default; Express/OAuth load only in HTTP mode,
+and it **refuses a non-loopback bind without a password** (fail-closed).
+
+- **[SELF_HOST_LXC.md](SELF_HOST_LXC.md)** — run it in an LXC on your Proxmox host
+  (systemd, no Docker) behind a Cloudflare Tunnel. The common path.
+- **[SELF_HOST.md](SELF_HOST.md)** — the Docker Compose + cloudflared variant (for a
+  separate box / NAS).
+
 ## Building the bundle
 
 `npm run pack` builds and packs `clustr.mcpb` with an auto-incrementing version,
