@@ -112,25 +112,61 @@ curl -s localhost:8080/health             # → {"status":"ok","auth":"oauth"}
 ```
 If `/health` shows `"auth":"oauth"`, the server is up and protected.
 
-## 5. Cloudflare Tunnel (in the same LXC)
+## 5. Public ingress — pick one
+Clustr needs a public HTTPS address Anthropic's servers can reach (Twingate/VPNs
+can't do this — the caller is Anthropic's cloud, not your device). Two options:
+
+### Option A — Tailscale Funnel (no domain) ← recommended if you already run Tailscale
+One-time, in the **Tailscale admin console**: enable **HTTPS** (MagicDNS + HTTPS
+certificates) and turn on **Funnel** for this node (Access Controls → add the
+`funnel` node attribute; the first `tailscale funnel` command also prints a link to
+enable it if it isn't).
+
+In the LXC:
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# Unprivileged LXC needs a TUN device. Easiest: userspace networking (no host edits):
+tailscaled --tun=userspace-networking --statedir=/var/lib/tailscale >/var/log/tailscaled.log 2>&1 &
+#   (or, the "normal" way: add the tun device to the CT on the Proxmox HOST instead —
+#    see the note below — then just `systemctl enable --now tailscaled`.)
+
+tailscale up
+tailscale funnel --bg 8080            # publish local :8080 on public :443
+tailscale funnel status               # shows your https://<machine>.<tailnet>.ts.net URL
+```
+Set **`CLUSTR_PUBLIC_URL`** in `/etc/clustr.env` to that exact `https://<machine>.<tailnet>.ts.net`
+(no trailing slash), then `systemctl restart clustr`.
+
+> TUN device the "normal" way (optional): on the **Proxmox host**, append to
+> `/etc/pve/lxc/<ctid>.conf`:
+> ```
+> lxc.cgroup2.devices.allow: c 10:200 rwm
+> lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+> ```
+> reboot the CT, then run `tailscaled` as a normal service. Userspace mode above
+> avoids this entirely and is fine for Funnel.
+
+### Option B — Cloudflare Tunnel (needs a domain on a free Cloudflare account)
 1. **Cloudflare dashboard → Zero Trust → Networks → Tunnels → Create a tunnel**
-   (Cloudflared). Name it, and on the install screen **copy the token** (the long
-   `eyJ...` string).
-2. Install cloudflared in the LXC and register it as a service with that token:
+   (Cloudflared). Name it and **copy the token** (the long `eyJ...` string).
+2. In the LXC:
    ```bash
    curl -fsSL https://pkg.cloudflare.com/cloudflared-stable-linux-$(dpkg --print-architecture).deb -o /tmp/cf.deb
    apt -y install /tmp/cf.deb
    cloudflared service install <PASTE_TUNNEL_TOKEN>
    systemctl status cloudflared --no-pager   # active (running)
    ```
-3. Back in the dashboard, add a **Public Hostname** to the tunnel:
-   - **Subdomain/domain:** `clustr.yourdomain.com` (must match `CLUSTR_PUBLIC_URL`)
-   - **Service:** `HTTP` → `localhost:8080`
-4. Verify from anywhere: open **`https://clustr.yourdomain.com/health`** → `{"status":"ok",...}`.
+3. In the dashboard, add a **Public Hostname**: `clustr.yourdomain.com` →
+   service `HTTP` → `localhost:8080`. Set `CLUSTR_PUBLIC_URL=https://clustr.yourdomain.com`.
+
+**Verify (either option):** open `https://<your-public-url>/health` from your phone on
+mobile data → `{"status":"ok","auth":"oauth"}`.
 
 ## 6. Add it to Claude (phone + web)
 Easiest on **claude.ai** in a browser (the connector then syncs to your phone):
-1. **Settings → Connectors → Add custom connector** → paste `https://clustr.yourdomain.com`.
+1. **Settings → Connectors → Add custom connector** → paste your public URL
+   (the `*.ts.net` Funnel URL, or `https://clustr.yourdomain.com`).
 2. Claude discovers the OAuth metadata and sends you to **Clustr's sign-in page** →
    enter `admin` + your `CLUSTR_AUTH_PASSWORD`.
 3. Approve → connected. Open the **phone app** → Clustr's tools are there too.
