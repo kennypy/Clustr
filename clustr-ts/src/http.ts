@@ -69,6 +69,18 @@ export async function runHttp(
     bearer = [bearerAuthMiddleware(provider, baseUrl)];
   }
 
+  // DNS-rebinding protection for /mcp. If the operator didn't pin hosts
+  // explicitly, default to the public URL's host (which is exactly the Host a
+  // legitimate client sends), so it's on by default behind a tunnel.
+  let allowedHosts = opts.allowedHosts;
+  if (allowedHosts.length === 0 && opts.publicUrl) {
+    try {
+      allowedHosts = [new URL(opts.publicUrl).host];
+    } catch {
+      /* malformed CLUSTR_PUBLIC_URL — leave unset rather than break startup */
+    }
+  }
+
   // One transport per session, kept by session id.
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
@@ -87,7 +99,7 @@ export async function runHttp(
       }
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
-        allowedHosts: opts.allowedHosts.length ? opts.allowedHosts : undefined,
+        allowedHosts: allowedHosts.length ? allowedHosts : undefined,
         onsessioninitialized: (id) => {
           transports.set(id, transport!);
         },

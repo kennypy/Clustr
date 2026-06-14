@@ -68,6 +68,7 @@ function passwordMatches(expected: string, given: string): boolean {
 
 interface PendingLogin {
   clientId: string;
+  clientName?: string;
   params: AuthorizationParams;
   attempts: number;
   expiresAt: number;
@@ -140,12 +141,19 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
     const id = rand();
     this.pending.set(id, {
       clientId: client.client_id,
+      clientName: client.client_name,
       params,
       attempts: 0,
       expiresAt: now() + LOGIN_TTL_MS,
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(loginPage(id));
+    res.send(
+      loginPage({
+        loginId: id,
+        clientName: client.client_name,
+        redirectUri: params.redirectUri,
+      }),
+    );
   }
 
   /** Called by the POST /login route. Validates the password, mints a code, and
@@ -157,7 +165,7 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
     if (!p || p.expiresAt < now()) {
       this.pending.delete(loginId);
       res.status(400).setHeader("Content-Type", "text/html; charset=utf-8");
-      res.send(loginPage("", "Login expired — start again from Claude."));
+      res.send(loginPage({ loginId: "", error: "Login expired — start again from Claude." }));
       return;
     }
     if (!passwordMatches(this.cfg.password, password)) {
@@ -165,11 +173,18 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
       if (p.attempts >= MAX_LOGIN_ATTEMPTS) {
         this.pending.delete(loginId); // burn it
         res.status(429).setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(loginPage("", "Too many attempts — start again from Claude."));
+        res.send(loginPage({ loginId: "", error: "Too many attempts — start again from Claude." }));
         return;
       }
       res.status(401).setHeader("Content-Type", "text/html; charset=utf-8");
-      res.send(loginPage(loginId, "Incorrect password."));
+      res.send(
+        loginPage({
+          loginId,
+          clientName: p.clientName,
+          redirectUri: p.params.redirectUri,
+          error: "Incorrect password.",
+        }),
+      );
       return;
     }
     this.pending.delete(loginId);
@@ -303,28 +318,65 @@ export function makeLoginThrottle(
   };
 }
 
-function loginPage(loginId: string, error?: string): string {
+/** HTML-escape untrusted values. `client_name` and `redirect_uri` come from
+ *  open dynamic registration, so they MUST be escaped before display. */
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c,
+  );
+}
+
+function loginPage(opts: {
+  loginId: string;
+  clientName?: string;
+  redirectUri?: string;
+  error?: string;
+}): string {
+  const { loginId, clientName, redirectUri, error } = opts;
   const err = error
-    ? `<p style="color:#c0392b;margin:0 0 12px">${error}</p>`
+    ? `<p style="color:#c0392b;margin:0 0 12px">${escapeHtml(error)}</p>`
     : "";
+
+  // Consent: show *what* is asking and *where* it will send you back, so a
+  // malicious client / crafted authorize link is visible before you type the
+  // password. Both values are attacker-controllable → escaped.
+  let consent = "";
+  if (loginId) {
+    const who = escapeHtml(clientName?.trim() || "An application");
+    let where = "";
+    if (redirectUri) {
+      try {
+        where = ` and return you to <strong>${escapeHtml(new URL(redirectUri).host)}</strong>`;
+      } catch {
+        /* malformed redirect_uri — omit the host line */
+      }
+    }
+    consent =
+      `<p style="color:#445;margin:0 0 16px;font-size:14px">` +
+      `<strong>${who}</strong> wants to connect to your Proxmox${where}. ` +
+      `Only continue if you started this from Claude.</p>`;
+  }
+
   const form = loginId
     ? `<form method="post" action="login">
-         <input type="hidden" name="login_id" value="${loginId}">
+         <input type="hidden" name="login_id" value="${escapeHtml(loginId)}">
          <input type="password" name="password" placeholder="Password" autofocus
                 style="width:100%;padding:10px;margin:0 0 12px;border:1px solid #ccc;border-radius:6px">
          <button type="submit"
                  style="width:100%;padding:10px;border:0;border-radius:6px;background:#2d6cdf;color:#fff;font-weight:600;cursor:pointer">
-           Sign in
+           Allow &amp; sign in
          </button>
        </form>`
     : "";
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Clustr — Sign in</title></head>
     <body style="font-family:system-ui,sans-serif;background:#f4f6fb;margin:0">
-      <div style="max-width:340px;margin:12vh auto;background:#fff;padding:28px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
+      <div style="max-width:360px;margin:12vh auto;background:#fff;padding:28px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
         <h1 style="font-size:20px;margin:0 0 4px">Clustr</h1>
         <p style="color:#667;margin:0 0 18px">Sign in to connect your Proxmox.</p>
-        ${err}${form}
+        ${consent}${err}${form}
       </div>
     </body></html>`;
 }
@@ -358,7 +410,9 @@ export function mountOAuth(
     (req: Request, res: Response) => {
       if (throttled()) {
         res.status(429).setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(loginPage("", "Too many attempts — wait a minute and retry."));
+        res.send(
+          loginPage({ loginId: "", error: "Too many attempts — wait a minute and retry." }),
+        );
         return;
       }
       const loginId = String(req.body?.login_id ?? "");
