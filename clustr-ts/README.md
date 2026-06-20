@@ -41,7 +41,7 @@ and it **refuses a non-loopback bind without a password** (fail-closed).
 so Claude Desktop always installs it as a *new* version (no uninstall dance).
 Pass an explicit version for a release: `npm run pack -- 0.3.0`.
 
-## Status — 75 tools
+## Status — 77 tools
 
 - ✅ **Multi-host** — manage multiple Proxmox clusters from one instance;
   `list_endpoints` / `add_endpoint` / `remove_endpoint`, plus a `host` arg on
@@ -51,7 +51,7 @@ Pass an explicit version for a release: `npm run pack -- 0.3.0`.
   task follow-up, metrics history (RRD trends), pools, networking + guest IPs,
   pending updates + apt repos, replication, cluster log, and a one-call
   **`cluster_review`**.
-- ✅ Write tools (36): power, snapshots, two-step delete, create, backup/restore,
+- ✅ Write tools (38): power, snapshots, two-step delete, create, backup/restore,
   reconfigure, grow disks, clone, **migrate**, and **downloads**. Same safeguards
   throughout: `confirm=true` on destructive ops, two-step token flows (single-use
   5-min token + exact-identifier match + re-verification), and the hyphenated
@@ -104,6 +104,24 @@ clone, migrate, **backup, and restore** all have both variants.
 
 These backup/restore tools are TypeScript-only for now (the Python build is at
 36 tools); they can be ported to Python later if needed.
+
+### Run commands inside guests (`run_vm_command` / `run_container_command`)
+Run a shell command *inside* a guest and get stdout/stderr/exit code back —
+e.g. `apt-get update && apt-get -y upgrade`, or a quick `mkdir`. Both are gated
+behind `confirm=true` (preview first, then run) and flagged destructive, since
+arbitrary commands are the most powerful thing the token can do. Commands run
+through `/bin/sh -c`, so `&&`, pipes, and redirection work; run them
+non-interactively (`-y`).
+
+- **`run_vm_command`** (QEMU) uses the **guest agent** (`agent/exec` →
+  poll `agent/exec-status`) for clean, structured output. Needs
+  `qemu-guest-agent` installed and running in the VM, with the Agent option
+  enabled.
+- **`run_container_command`** (LXC) has no exec API to call, so it drives the
+  container **console** (`termproxy` + `vncwebsocket`): it types a
+  marker-wrapped command into the shell and scrapes the output back. That makes
+  it best-effort (expects a normal `/bin/sh` prompt, can't split stdout from
+  stderr) — the container must be running and the token needs `VM.Console`.
 
 ## Develop
 

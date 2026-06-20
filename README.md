@@ -7,7 +7,7 @@ manage nodes, VMs, and LXC containers directly from Claude — *"what's running 
 my cluster?"*, *"snapshot container 130 before I update it"*, *"migrate VM 102 to
 pve2"*, *"back up this LXC to my PBS, then delete it"*.
 
-The implementation lives in **[`clustr-ts/`](clustr-ts/)** (TypeScript). **75 tools**
+The implementation lives in **[`clustr-ts/`](clustr-ts/)** (TypeScript). **77 tools**
 across read, management, backup/restore, and multi-cluster — see
 **[clustr-ts/README.md](clustr-ts/README.md)** for the full list and development.
 

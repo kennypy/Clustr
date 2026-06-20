@@ -46,6 +46,8 @@ import { register as registerVmConfig } from "./tools/write/vmConfig.js";
 import { register as registerContainerConfig } from "./tools/write/containerConfig.js";
 import { register as registerClone } from "./tools/write/clone.js";
 import { register as registerMigrate } from "./tools/write/migrate.js";
+import { register as registerVmExec } from "./tools/write/vmExec.js";
+import { register as registerContainerExec } from "./tools/write/containerExec.js";
 
 export function buildServer(): McpServer {
   const server = new McpServer({ name: "clustr", version: "0.1.0" });
@@ -94,6 +96,8 @@ export function buildServer(): McpServer {
   registerContainerConfig(server);
   registerClone(server);
   registerMigrate(server);
+  registerVmExec(server);
+  registerContainerExec(server);
   return server;
 }
 
