@@ -7,6 +7,8 @@ import {
   endpoints,
   defaultEndpointName,
   hasEndpoint,
+  addEndpoint,
+  canPersistEndpoints,
 } from "../dist/endpoints.js";
 
 function clearEnv() {
@@ -32,6 +34,40 @@ test("single PROXMOX_* env -> one 'default' endpoint", () => {
   assert.equal(eps[0].host, "1.2.3.4");
   assert.equal(defaultEndpointName(), "default");
   clearEnv();
+});
+
+test("no config at all -> zero endpoints, no throw (desktop token-less boot)", () => {
+  clearEnv();
+  resetEndpoints();
+  assert.equal(endpoints().length, 0);
+  assert.equal(canPersistEndpoints(), false);
+});
+
+test("addEndpoint can register session-only when no endpoints file is set", () => {
+  clearEnv();
+  resetEndpoints();
+  // persistToFile=false must NOT throw even with no CLUSTR_ENDPOINTS_FILE.
+  const ep = addEndpoint(
+    { name: "1.2.3.4", host: "1.2.3.4", tokenName: "clustr", tokenValue: "secret" },
+    false,
+  );
+  assert.equal(ep.name, "1.2.3.4");
+  assert.ok(hasEndpoint("1.2.3.4"));
+  // The default (and only) endpoint resolves to it.
+  assert.equal(defaultEndpointName(), "1.2.3.4");
+  clearEnv();
+  resetEndpoints();
+});
+
+test("addEndpoint(persist=true) without a file throws (explicit add_endpoint path)", () => {
+  clearEnv();
+  resetEndpoints();
+  assert.throws(
+    () => addEndpoint({ name: "x", host: "1.2.3.4", tokenName: "t", tokenValue: "s" }),
+    /CLUSTR_ENDPOINTS_FILE/,
+  );
+  clearEnv();
+  resetEndpoints();
 });
 
 test("CLUSTR_ENDPOINTS json -> multiple, first is default", () => {

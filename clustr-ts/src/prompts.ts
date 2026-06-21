@@ -37,6 +37,34 @@ export function register(server: McpServer): void {
   );
 
   server.registerPrompt(
+    "clustr-setup",
+    {
+      title: "Clustr — set up / get an API token",
+      description:
+        "Guided first-time setup: turn your Proxmox host IP into a correctly-scoped " +
+        "API token and wire it into Clustr.",
+    },
+    () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text:
+              "Help me set up Clustr for my Proxmox cluster. Ask me for my Proxmox " +
+              "host IP (and whether I want full management or read-only), then call " +
+              "the setup_clustr tool to give me the login link and the exact snippet " +
+              "to create an API token with the right permissions. Walk me through " +
+              "copying the token secret back. If I'd rather not paste a snippet and " +
+              "I'm comfortable giving a one-time admin login, offer to provision the " +
+              "token over the API instead (confirm before doing it).",
+          },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
     "clustr-review",
     {
       title: "Clustr — full cluster review",
