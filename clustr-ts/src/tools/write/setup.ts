@@ -70,6 +70,9 @@ async function getTicket(
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: form.toString(),
       dispatcher: c.dispatcher,
+      // Never follow a redirect: a 307/308 would resend this body (the admin
+      // password) to the redirect target.
+      redirect: "error",
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -107,6 +110,7 @@ async function pv(
     },
     body: form.toString(),
     dispatcher: c.dispatcher,
+    redirect: "error", // don't let a redirect carry the session cookie elsewhere
   });
   const text = await resp.text();
   let data: any = null;
@@ -128,6 +132,7 @@ async function tokenWorks(
     const resp = await fetch(`${c.base}/version`, {
       headers: { Authorization: `PVEAPIToken=${tokenId(user, tokenName)}=${value}` },
       dispatcher: c.dispatcher,
+      redirect: "error",
     });
     return resp.ok;
   } catch {
@@ -263,6 +268,15 @@ export function register(server: McpServer): void {
           .boolean()
           .default(false)
           .describe("Verify the host's TLS certificate (off for self-signed)."),
+        allow_insecure_tls: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Only relevant on the automated (admin_password) path: acknowledge " +
+              "sending the admin password over an UNVERIFIED TLS connection " +
+              "(verify_ssl=false). Off by default — the tool refuses rather than " +
+              "risk a MITM capturing your root password.",
+          ),
         add_as_endpoint: z
           .boolean()
           .default(true)
@@ -291,6 +305,25 @@ export function register(server: McpServer): void {
         if (!wantsAuto) {
           // Guided path — also nudges toward the automated option.
           return formatGuide({ host, port, mode, user, tokenName });
+        }
+
+        // The automated path sends a Proxmox admin password to the host. Refuse
+        // to do that over an unverified TLS connection unless explicitly
+        // acknowledged — a MITM on the path would otherwise capture root creds.
+        if (!args.verify_ssl && !args.allow_insecure_tls) {
+          return (
+            `⛔ **Refusing to send your admin password over unverified TLS.**\n\n` +
+            `You're using the automated path (admin_user + admin_password) with ` +
+            "`verify_ssl=false`, so the password would cross the network without " +
+            "certificate verification — a man-in-the-middle could capture your " +
+            "Proxmox root credentials.\n\nEither:\n" +
+            "- set `verify_ssl=true` (if the host has a trusted or pinned cert), or\n" +
+            "- on a trusted LAN where you accept the risk, re-run with " +
+            "`allow_insecure_tls=true`, or\n" +
+            "- use the **guided** path instead (omit admin_user/admin_password): the " +
+            "`pveum` snippet creates the token locally on the node, so no password " +
+            "ever leaves the host."
+          );
         }
 
         if (!args.confirm) {

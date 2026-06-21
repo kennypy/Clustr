@@ -58,16 +58,24 @@ export function privsForApi(): string {
 }
 
 /** Accept an IP, hostname, `host:port`, or full `https://host:port/...` URL and
- *  return a clean host + API port (defaulting to 8006). */
+ *  return a clean host + API port (defaulting to 8006).
+ *
+ *  Security: the result is interpolated into `https://${host}:${port}/...` for a
+ *  request that, on the automated path, carries a Proxmox **admin password**. So
+ *  this rejects anything that could redirect that request elsewhere — userinfo
+ *  (`user:pass@host`), an embedded scheme, path, query, or fragment — and locks
+ *  the host to a bare hostname / IPv4 / bracketed IPv6, mirroring the validation
+ *  `endpoints.normalize()` applies to persisted endpoints. Without this, a host
+ *  like `root:pw@evil.com` would POST the admin password to `evil.com`. */
 export function parseHostInput(raw: string): { host: string; port: number } {
   let s = (raw ?? "").trim();
   if (!s) throw new Error("A Proxmox host IP or hostname is required.");
-  s = s.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, ""); // strip scheme
-  s = s.replace(/\/.*$/, ""); // strip any path/hash
+  s = s.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, ""); // strip a leading scheme
+  s = s.replace(/[/?#].*$/, ""); // strip any path, query, or fragment
   let host = s;
   let port = 8006;
 
-  const v6 = s.match(/^\[(.+)\](?::(\d+))?$/); // [::1]:8006
+  const v6 = s.match(/^\[([0-9A-Fa-f:]+)\](?::(\d+))?$/); // [2001:db8::1]:8006
   if (v6) {
     host = v6[1];
     if (v6[2]) port = Number.parseInt(v6[2], 10);
@@ -76,6 +84,14 @@ export function parseHostInput(raw: string): { host: string; port: number } {
     if (idx > -1 && /^\d+$/.test(s.slice(idx + 1))) {
       host = s.slice(0, idx);
       port = Number.parseInt(s.slice(idx + 1), 10);
+    }
+    // Bare hostname or IPv4 only — nothing that can carry credentials (`@`), a
+    // port we didn't parse, or any other URL machinery.
+    if (!/^[A-Za-z0-9.-]+$/.test(host)) {
+      throw new Error(
+        `Invalid Proxmox host '${host}': use a bare hostname, IPv4, or [IPv6] — ` +
+          "no scheme, path, credentials ('@'), or embedded port.",
+      );
     }
   }
   if (!host) throw new Error(`Could not parse a host from '${raw}'.`);

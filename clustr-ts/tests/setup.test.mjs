@@ -25,6 +25,15 @@ test("parseHostInput handles bracketed IPv6 and rejects empty", () => {
   assert.throws(() => parseHostInput("   "), /required/);
 });
 
+test("parseHostInput rejects userinfo / credential-redirect hosts (H1)", () => {
+  // Would otherwise POST the admin password to evil.com.
+  assert.throws(() => parseHostInput("root:pass@evil.com"), /Invalid Proxmox host/);
+  assert.throws(() => parseHostInput("admin@evil.com"), /Invalid Proxmox host/);
+  // Fragment/query stripped, leaving a clean host.
+  assert.deepEqual(parseHostInput("evil.com#@real"), { host: "evil.com", port: 8006 });
+  assert.deepEqual(parseHostInput("10.0.0.5?x=1"), { host: "10.0.0.5", port: 8006 });
+});
+
 test("proxmoxWebUrl builds the web UI URL", () => {
   assert.equal(proxmoxWebUrl("192.168.1.10", 8006), "https://192.168.1.10:8006/");
   assert.equal(proxmoxWebUrl("pve", 8007), "https://pve:8007/");
