@@ -49,12 +49,14 @@ const CODE_TTL_MS = 60_000;
 const LOGIN_TTL_MS = 10 * 60_000;
 const MAX_LOGIN_ATTEMPTS = 5; // guesses allowed per authorization before the id is burned
 const MAX_CLIENTS = 1000; // cap dynamic registrations (open endpoint)
+const MAX_PENDING = 200; // cap in-flight /authorize logins (open endpoint, see authorize())
 const SWEEP_INTERVAL_MS = 60_000;
 
-// Global fixed-window throttle for /login. Per-IP is meaningless behind a tunnel
-// (cloudflared/tailscale connect from localhost), so this caps total throughput.
+// Global fixed-window throttles. Per-IP is meaningless behind a tunnel
+// (cloudflared/tailscale connect from localhost), so these cap total throughput.
 const LOGIN_WINDOW_MS = 60_000;
-const LOGIN_MAX_PER_WINDOW = 30;
+const LOGIN_MAX_PER_WINDOW = 10; // password guesses/min globally (one shared secret)
+const AUTHORIZE_MAX_PER_WINDOW = 60; // /authorize hits/min (each mints pending state)
 
 const rand = (): string => randomBytes(32).toString("hex");
 const now = (): number => Date.now();
@@ -138,6 +140,14 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
     params: AuthorizationParams,
     res: Response,
   ): Promise<void> {
+    // Open, unauthenticated endpoint: bound the pending map so a flood of
+    // /authorize hits can't grow memory faster than the sweeper reclaims it.
+    // Evict oldest (insertion-ordered Map) when at the cap.
+    while (this.pending.size >= MAX_PENDING) {
+      const oldest = this.pending.keys().next().value;
+      if (!oldest) break;
+      this.pending.delete(oldest);
+    }
     const id = rand();
     this.pending.set(id, {
       clientId: client.client_id,
@@ -391,6 +401,17 @@ export function mountOAuth(
   opts: { baseUrl: URL; config: OAuthConfig },
 ): { provider: ClustrOAuthProvider } {
   const provider = new ClustrOAuthProvider(opts.config);
+
+  // Throttle /authorize before the SDK router handles it: each call mints
+  // unauthenticated pending state, so cap the rate (the map is also capped).
+  const authorizeThrottle = makeLoginThrottle(LOGIN_WINDOW_MS, AUTHORIZE_MAX_PER_WINDOW);
+  app.use((req: Request, res: Response, next: express.NextFunction) => {
+    if (req.path === "/authorize" && authorizeThrottle()) {
+      res.status(429).type("text/plain").send("Too many authorization requests — retry shortly.");
+      return;
+    }
+    next();
+  });
 
   app.use(
     mcpAuthRouter({

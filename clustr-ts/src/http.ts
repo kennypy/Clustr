@@ -52,6 +52,16 @@ export async function runHttp(
   const authEnabled = !!opts.auth?.password;
   assertSafeBind(opts.host, opts.allowUnauthenticated, authEnabled);
 
+  // The whole remote gate is one shared password exposed to the internet. The
+  // /login throttle bounds guess rate, but a weak secret is still the weak link.
+  if (authEnabled && (opts.auth!.password.length < 12)) {
+    console.error(
+      "WARNING: CLUSTR_AUTH_PASSWORD is short (<12 chars). It's the single secret " +
+        "protecting your whole cluster over the internet — use a long, random " +
+        "passphrase.",
+    );
+  }
+
   const app = express();
   app.use(express.json({ limit: "4mb" }));
 

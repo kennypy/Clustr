@@ -14,6 +14,31 @@ import { z } from "zod";
 
 import { runWithEndpoint } from "./proxmox.js";
 
+/**
+ * Identifier arguments that get interpolated into the API path as a single
+ * segment (`/nodes/${node}/...`, `/pools/${poolid}`). Lock them to the Proxmox
+ * identifier charset so a value like `pve/qemu/100/config` can't smuggle extra
+ * path segments past `assertSafeApiPath` (which only blocks `..` and control
+ * chars, not structural `/`). Numbers (vmid/ctid) are already safe via zod, and
+ * UPIDs have their own parser. Centralised here so every tool is covered without
+ * editing ~25 modules.
+ */
+const PATH_ID_FIELDS = ["node", "poolid"] as const;
+const SAFE_ID = /^[A-Za-z0-9._-]+$/;
+
+export function invalidPathIdentifier(args: Record<string, unknown>): string | null {
+  for (const f of PATH_ID_FIELDS) {
+    const v = args[f];
+    if (typeof v === "string" && v.length > 0 && !SAFE_ID.test(v)) {
+      return (
+        `Invalid \`${f}\`: '${v}'. Proxmox ${f} names are letters, digits, dot, ` +
+        "hyphen, underscore — no '/', spaces, or other characters."
+      );
+    }
+  }
+  return null;
+}
+
 const hostField = z
   .string()
   .optional()
@@ -43,6 +68,10 @@ export function patchForMultiHost(server: McpServer): void {
       const host = args?.host as string | undefined;
       const rest = args ? { ...args } : {};
       delete (rest as Record<string, unknown>).host;
+      const bad = invalidPathIdentifier(rest as Record<string, unknown>);
+      if (bad) {
+        return { content: [{ type: "text", text: `Refusing request: ${bad}` }] };
+      }
       return runWithEndpoint(host, () => cb(rest, extra));
     });
   };
