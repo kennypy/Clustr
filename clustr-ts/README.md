@@ -41,7 +41,7 @@ and it **refuses a non-loopback bind without a password** (fail-closed).
 so Claude Desktop always installs it as a *new* version (no uninstall dance).
 Pass an explicit version for a release: `npm run pack -- 0.3.0`.
 
-## Status — 77 tools
+## Status — 78 tools
 
 - ✅ **Multi-host** — manage multiple Proxmox clusters from one instance;
   `list_endpoints` / `add_endpoint` / `remove_endpoint`, plus a `host` arg on
@@ -155,6 +155,19 @@ larger — that's expected.)
 2. Double-click `clustr.mcpb` → Claude Desktop opens an install form → enter the
    host and token → Install. The secret is stored in the OS keychain.
 3. Ask Claude *"what's running on my Proxmox cluster?"*
+
+### Streamlined token creation — `setup_clustr`
+Step 1 is the part people get wrong (which privileges?). The **`setup_clustr`**
+tool (and the **`/clustr-setup`** prompt) automate it. Give it a host IP and it
+returns your Proxmox login link plus a single copy-paste `pveum` snippet that
+creates a dedicated **`Clustr`** role (least-privilege — covers every management
+tool, including `VM.Monitor`/`VM.Console` for the in-guest exec tools), a
+`clustr@pve` user, an API token, and the matching ACL — then prints the secret to
+paste back. Pass `mode: readonly` for a `PVEAuditor` token instead. Or hand it a
+one-time `admin_user` + `admin_password` (with `confirm=true`) and it provisions
+the token over the API and registers it for you — the password is used once and
+never stored. Because it takes a raw host (not a configured endpoint) and runs
+with zero endpoints set up, it works as your very first call.
 
 ## Configuration
 
