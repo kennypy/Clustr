@@ -19,7 +19,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Agent, fetch } from "undici";
 
-import { addEndpoint } from "../../endpoints.js";
+import { addEndpoint, canPersistEndpoints } from "../../endpoints.js";
 import { safe } from "../../safe.js";
 import {
   CLUSTR_ROLE,
@@ -320,20 +320,26 @@ export function register(server: McpServer): void {
 
         let endpointLine = "";
         if (args.add_as_endpoint) {
+          const persistable = canPersistEndpoints();
           try {
-            const ep = addEndpoint({
-              name: host,
-              host,
-              user,
-              port,
-              tokenName,
-              tokenValue: res.value,
-              verifySsl: args.verify_ssl,
-            });
-            endpointLine =
-              `\n✅ Registered as endpoint **${ep.name}** for this session — try ` +
-              `\`list_nodes\` (host: ${ep.name}). For the desktop extension, also paste ` +
-              "the values below into the settings form so it persists across restarts.";
+            const ep = addEndpoint(
+              {
+                name: host,
+                host,
+                user,
+                port,
+                tokenName,
+                tokenValue: res.value,
+                verifySsl: args.verify_ssl,
+              },
+              persistable,
+            );
+            endpointLine = persistable
+              ? `\n✅ Registered and saved as endpoint **${ep.name}** — try \`list_nodes\`.`
+              : `\n✅ Registered as endpoint **${ep.name}** for this session — try ` +
+                `\`list_nodes\` (host: ${ep.name}). To keep it across restarts, paste the ` +
+                "values above into the Clustr extension's settings form (stored in your " +
+                "OS keychain).";
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             endpointLine = `\n⚠️ Could not auto-register the endpoint: ${msg}`;

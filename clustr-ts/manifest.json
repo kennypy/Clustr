@@ -32,28 +32,28 @@
     "proxmox_host": {
       "type": "string",
       "title": "Proxmox Host",
-      "description": "IP or hostname of your Proxmox node (e.g. 192.168.1.10)",
-      "required": true
+      "description": "IP or hostname of your Proxmox node (e.g. 192.168.1.10). Optional — you can leave every field below blank, install, then ask Claude to 'set up Clustr for <your host IP>' to generate a correctly-scoped token, and paste it back here.",
+      "required": false
     },
     "proxmox_user": {
       "type": "string",
       "title": "Proxmox User",
-      "description": "Proxmox user with the realm, e.g. root@pam",
+      "description": "Proxmox user with the realm, e.g. root@pam (or clustr@pve if you used the streamlined setup).",
       "default": "root@pam",
-      "required": true
+      "required": false
     },
     "proxmox_token_name": {
       "type": "string",
       "title": "API Token Name",
-      "description": "The API token ID you created in Proxmox (Datacenter → API Tokens). Don't have one yet? Install with any token, then ask Claude to 'set up Clustr for <your host IP>' and it generates a correctly-scoped token for you.",
-      "required": true
+      "description": "The API token ID you created in Proxmox (Datacenter → API Tokens). Don't have one yet? Leave blank, install, and ask Claude to 'set up Clustr for <your host IP>'.",
+      "required": false
     },
     "proxmox_token_value": {
       "type": "string",
       "title": "API Token Secret",
       "description": "The token secret value. Stored securely in your OS keychain.",
       "sensitive": true,
-      "required": true
+      "required": false
     },
     "proxmox_port": {
       "type": "number",

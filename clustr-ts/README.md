@@ -150,10 +150,13 @@ larger — that's expected.)
 
 ## Install (what you ship to a user)
 
-1. Create a Proxmox API token (Datacenter → Permissions → API Tokens). Use a
-   `PVEAuditor`-scoped token for read-only.
-2. Double-click `clustr.mcpb` → Claude Desktop opens an install form → enter the
-   host and token → Install. The secret is stored in the OS keychain.
+1. Double-click `clustr.mcpb` → Claude Desktop opens an install form. **All fields
+   are optional** — you can leave them blank and Install. The server boots without
+   a token (you just can't manage anything yet).
+2. Ask Claude *"set up Clustr for &lt;your host IP&gt;"* (or run `/clustr-setup`). It
+   generates a correctly-scoped API token (see below), then you paste the host +
+   token back into the extension's settings form — the secret is stored in your OS
+   keychain. *(Already have a token? Skip step 1's blanks and just fill the form.)*
 3. Ask Claude *"what's running on my Proxmox cluster?"*
 
 ### Streamlined token creation — `setup_clustr`

@@ -38,8 +38,9 @@ export function runWithEndpoint<T>(name: string | undefined, fn: () => T): T {
   if (!hasEndpoint(resolved)) {
     if (endpointNames().length === 0) {
       throw new ProxmoxError(
-        "No Proxmox endpoint configured — add one with add_endpoint, or set " +
-          "PROXMOX_HOST / PROXMOX_TOKEN_NAME / PROXMOX_TOKEN_VALUE.",
+        "No Proxmox endpoint configured yet. Run `setup_clustr` with your host IP to " +
+          "create an API token (it'll walk you through it), add one with `add_endpoint`, " +
+          "or set PROXMOX_HOST / PROXMOX_TOKEN_NAME / PROXMOX_TOKEN_VALUE.",
       );
     }
     throw new ProxmoxError(

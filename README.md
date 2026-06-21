@@ -23,9 +23,10 @@ and never stored).
 
 ## Two ways to run it
 
-- **Desktop extension (`.mcpb`)** — install like an app into Claude Desktop: fill
-  in a settings form (Proxmox host + API token) and the tools appear. Runs locally
-  over stdio; no network port. This is the simplest path. See
+- **Desktop extension (`.mcpb`)** — install like an app into Claude Desktop. All
+  settings are optional, so you can install with no token and let `setup_clustr`
+  generate one (above), or fill in the Proxmox host + API token form up front.
+  Runs locally over stdio; no network port. This is the simplest path. See
   [clustr-ts/README.md](clustr-ts/README.md).
 
 - **Remote connector** — run it as a small HTTPS service so you can use it from

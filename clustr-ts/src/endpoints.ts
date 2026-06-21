@@ -148,17 +148,30 @@ export function hasEndpoint(name: string): boolean {
   return load().has(name);
 }
 export function defaultEndpointName(): string {
-  load();
-  return defaultName;
+  const map = load();
+  // Prefer an explicit "default" (the PROXMOX_* single host). Otherwise fall
+  // back to the sole/first endpoint — important after a runtime add_endpoint /
+  // setup_clustr on a fresh instance, so the new endpoint is usable without
+  // having to name it on every call.
+  if (map.has(defaultName)) return defaultName;
+  return [...map.keys()][0] ?? defaultName;
 }
 export function isMultiHost(): boolean {
   return load().size > 1;
 }
 
-export function addEndpoint(e: Record<string, any>): Endpoint {
+/** Whether endpoint changes can be persisted to disk (an endpoints file is set).
+ *  False on a stock desktop install, where durable config lives in the settings
+ *  form (OS keychain) instead — so callers can register session-only and tell
+ *  the user to paste into the form rather than failing. */
+export function canPersistEndpoints(): boolean {
+  return Boolean(filePath());
+}
+
+export function addEndpoint(e: Record<string, any>, persistToFile = true): Endpoint {
   const ep = normalize(e);
   load().set(ep.name, ep);
-  persist();
+  if (persistToFile) persist();
   return ep;
 }
 export function removeEndpoint(name: string): boolean {
