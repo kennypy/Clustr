@@ -33,8 +33,9 @@ tunnel just routes traffic — no central service, no shared secrets.
    - Cloudflare dashboard → Zero Trust → Networks → Tunnels → **Create a tunnel**
      (Cloudflared).
    - Copy the **tunnel token** into `TUNNEL_TOKEN` in `.env`.
-   - Add a **public hostname**: your `clustr.yourdomain.com` → service
-     `http://clustr:8080`.
+   - Add a **public hostname** (newer dashboards call this **Published application
+     routes**, on the tunnel itself — not Networks → Routes): your
+     `clustr.yourdomain.com` → service `http://clustr:8080`.
 
 3. **Start it**
    ```bash
@@ -45,7 +46,9 @@ tunnel just routes traffic — no central service, no shared secrets.
 
 4. **Add the connector in Claude**
    - claude.ai → Settings → Connectors → **Add custom connector** → enter your
-     `CLUSTR_PUBLIC_URL`.
+     `CLUSTR_PUBLIC_URL` **with `/mcp` appended** (e.g.
+     `https://clustr.yourdomain.com/mcp`). The MCP endpoint is `/mcp`; the bare root
+     returns 404 ("no MCP server found").
    - Claude discovers the OAuth metadata and sends you to Clustr's sign-in page;
      enter your password. Done — it now works on web and mobile.
 
@@ -55,7 +58,9 @@ tunnel just routes traffic — no central service, no shared secrets.
 - **Security posture:** the Proxmox token still scopes what any caller can do —
   pair the remote connector with a least-privilege (ideally pool-scoped) token.
   Tokens issued by Clustr's OAuth live in memory, so a restart means re-login.
-- **Extra hardening (optional):** put Cloudflare Access in front *as well* for a
-  second factor — Clustr's OAuth already gates access, so this is belt-and-braces.
+- **Don't put Cloudflare Access in front.** Its interactive browser login can't be
+  completed by Anthropic's servers and breaks the connector handshake. Clustr's own
+  OAuth is the gate. If you want brute-force protection on top, add something like
+  fail2ban on the sign-in route rather than an Access policy.
 - This is single-instance self-host by design. There is intentionally **no**
   central/hosted service holding anyone's Proxmox credentials.

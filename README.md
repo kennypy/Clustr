@@ -11,17 +11,20 @@ The implementation lives in **[`clustr-ts/`](clustr-ts/)** (TypeScript). **75 to
 across read, management, backup/restore, and multi-cluster — see
 **[clustr-ts/README.md](clustr-ts/README.md)** for the full list and development.
 
-## Two ways to run it
+## Choose your install
 
-- **Desktop extension (`.mcpb`)** — install like an app into Claude Desktop: fill
-  in a settings form (Proxmox host + API token) and the tools appear. Runs locally
-  over stdio; no network port. This is the simplest path. See
-  [clustr-ts/README.md](clustr-ts/README.md).
+Everyone runs their **own** instance against their **own** cluster — there's no
+hosted service and no shared credentials. Pick the path that fits:
 
-- **Remote connector** — run it as a small HTTPS service so you can use it from
-  **claude.ai and the mobile app**, protected by Clustr's built-in OAuth 2.1.
-  Step-by-step for an on-Proxmox LXC behind a Tailscale Funnel or Cloudflare
-  Tunnel: **[clustr-ts/SELF_HOST_LXC.md](clustr-ts/SELF_HOST_LXC.md)**.
+| | Best for | How |
+|---|---|---|
+| **Desktop extension (`.mcpb`)** | Claude Desktop on one machine. Simplest — no network, no domain, no password. | Download the `.mcpb` from [Releases](https://github.com/kennypy/Clustr/releases), open it in Claude Desktop, fill in Proxmox host + API token. See [clustr-ts/README.md](clustr-ts/README.md). |
+| **Remote connector** | Using it from **claude.ai and the mobile app**, anywhere. | Run it as a small HTTPS service behind a Cloudflare Tunnel or Tailscale Funnel, gated by Clustr's built-in OAuth 2.1. Add it in Claude with the **`/mcp`** URL (e.g. `https://clustr.example.com/mcp`). Full guide: **[clustr-ts/SELF_HOST_LXC.md](clustr-ts/SELF_HOST_LXC.md)**. |
+
+> **Remote security in one line:** the endpoint is public and the only gate is your
+> `CLUSTR_AUTH_PASSWORD` — use a long random one (it's effectively root on the host),
+> keep the Proxmox token least-privilege, bind Clustr to `127.0.0.1`, and let the
+> tunnel be the sole ingress. Do **not** add Cloudflare Access (it breaks the connector).
 
 ## Safety model
 

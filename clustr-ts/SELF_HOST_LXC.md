@@ -152,13 +152,23 @@ Set **`CLUSTR_PUBLIC_URL`** in `/etc/clustr.env` to that exact `https://<machine
    (Cloudflared). Name it and **copy the token** (the long `eyJ...` string).
 2. In the LXC:
    ```bash
-   curl -fsSL https://pkg.cloudflare.com/cloudflared-stable-linux-$(dpkg --print-architecture).deb -o /tmp/cf.deb
-   apt -y install /tmp/cf.deb
+   ARCH=$(dpkg --print-architecture)
+   curl -fsSL -o /tmp/cloudflared.deb \
+     https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}.deb
+   apt -y install /tmp/cloudflared.deb
+   cloudflared --version                     # confirms the install
    cloudflared service install <PASTE_TUNNEL_TOKEN>
    systemctl status cloudflared --no-pager   # active (running)
    ```
-3. In the dashboard, add a **Public Hostname**: `clustr.yourdomain.com` →
-   service `HTTP` → `localhost:8080`. Set `CLUSTR_PUBLIC_URL=https://clustr.yourdomain.com`.
+3. In the dashboard, add a **Public Hostname** — newer dashboards rename this tab
+   **Published application routes** (on the tunnel itself, *not* Networks → Routes,
+   which is CIDR/WARP private networking and the wrong thing): `clustr.yourdomain.com`
+   → service **HTTP** → `localhost:8080`. Use **HTTP**, not HTTPS — Clustr serves
+   plain HTTP locally and the tunnel terminates TLS. Set
+   `CLUSTR_PUBLIC_URL=https://clustr.yourdomain.com`.
+   **Do not** add a Cloudflare Access application in front: its interactive login
+   can't be completed by Anthropic's servers and breaks the connector. Clustr's own
+   OAuth is the only gate you want.
 
 **Verify (either option):** open `https://<your-public-url>/health` from your phone on
 mobile data → `{"status":"ok","auth":"oauth"}`.
@@ -166,7 +176,10 @@ mobile data → `{"status":"ok","auth":"oauth"}`.
 ## 6. Add it to Claude (phone + web)
 Easiest on **claude.ai** in a browser (the connector then syncs to your phone):
 1. **Settings → Connectors → Add custom connector** → paste your public URL
-   (the `*.ts.net` Funnel URL, or `https://clustr.yourdomain.com`).
+   **with the `/mcp` path**: `https://clustr.yourdomain.com/mcp` (or the Funnel URL
+   `https://<machine>.<tailnet>.ts.net/mcp`). The MCP endpoint is `/mcp`; the bare
+   root returns 404 and Claude reports *"no MCP server found."* OAuth discovery still
+   works from the `/mcp` URL.
 2. Claude discovers the OAuth metadata and sends you to **Clustr's sign-in page** →
    enter `admin` + your `CLUSTR_AUTH_PASSWORD`.
 3. Approve → connected. Open the **phone app** → Clustr's tools are there too.
