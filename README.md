@@ -7,14 +7,27 @@ manage nodes, VMs, and LXC containers directly from Claude — *"what's running 
 my cluster?"*, *"snapshot container 130 before I update it"*, *"migrate VM 102 to
 pve2"*, *"back up this LXC to my PBS, then delete it"*.
 
-The implementation lives in **[`clustr-ts/`](clustr-ts/)** (TypeScript). **75 tools**
+The implementation lives in **[`clustr-ts/`](clustr-ts/)** (TypeScript). **78 tools**
 across read, management, backup/restore, and multi-cluster — see
 **[clustr-ts/README.md](clustr-ts/README.md)** for the full list and development.
 
-## Choose your install
+## Getting a token (streamlined setup)
 
-Everyone runs their **own** instance against their **own** cluster — there's no
-hosted service and no shared credentials. Pick the path that fits:
+You need a Proxmox API token. The fastest way: ask Claude *"set up Clustr for
+192.168.1.10"* (or run the **`/clustr-setup`** prompt). The **`setup_clustr`**
+tool hands you your Proxmox login link plus a one-paste shell snippet that creates
+a least-privilege token with exactly the privileges Clustr needs — then you copy
+the secret back. If you'd rather not paste a snippet, give it a one-time admin
+login and it provisions the token over the API for you (the password is used once
+and never stored).
+
+## Two ways to run it
+
+- **Desktop extension (`.mcpb`)** — install like an app into Claude Desktop. All
+  settings are optional, so you can install with no token and let `setup_clustr`
+  generate one (above), or fill in the Proxmox host + API token form up front.
+  Runs locally over stdio; no network port. This is the simplest path. See
+  [clustr-ts/README.md](clustr-ts/README.md).
 
 | | Best for | How |
 |---|---|---|

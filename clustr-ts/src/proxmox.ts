@@ -10,7 +10,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { Agent, fetch } from "undici";
+import { Agent, fetch, WebSocket } from "undici";
 
 import {
   defaultEndpointName,
@@ -38,8 +38,9 @@ export function runWithEndpoint<T>(name: string | undefined, fn: () => T): T {
   if (!hasEndpoint(resolved)) {
     if (endpointNames().length === 0) {
       throw new ProxmoxError(
-        "No Proxmox endpoint configured — add one with add_endpoint, or set " +
-          "PROXMOX_HOST / PROXMOX_TOKEN_NAME / PROXMOX_TOKEN_VALUE.",
+        "No Proxmox endpoint configured yet. Run `setup_clustr` with your host IP to " +
+          "create an API token (it'll walk you through it), add one with `add_endpoint`, " +
+          "or set PROXMOX_HOST / PROXMOX_TOKEN_NAME / PROXMOX_TOKEN_VALUE.",
       );
     }
     throw new ProxmoxError(
@@ -95,7 +96,8 @@ export function assertSafeApiPath(path: string): void {
   }
 }
 
-type Params = Record<string, string | number | boolean | undefined | null>;
+type Scalar = string | number | boolean | undefined | null;
+type Params = Record<string, Scalar | Scalar[]>;
 
 async function request(
   method: string,
@@ -107,7 +109,9 @@ async function request(
   const url = new URL(baseUrl(ep) + path);
   if (opts.query) {
     for (const [k, v] of Object.entries(opts.query)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && !Array.isArray(v)) {
+        url.searchParams.set(k, String(v));
+      }
     }
   }
 
@@ -116,7 +120,15 @@ async function request(
   if (opts.body) {
     const form = new URLSearchParams();
     for (const [k, v] of Object.entries(opts.body)) {
-      if (v !== undefined && v !== null) form.set(k, String(v));
+      // Array values are repeated keys — that's how the Proxmox API receives
+      // array-typed parameters (e.g. the guest-agent `command` argv list).
+      if (Array.isArray(v)) {
+        for (const item of v) {
+          if (item !== undefined && item !== null) form.append(k, String(item));
+        }
+      } else if (v !== undefined && v !== null) {
+        form.set(k, String(v));
+      }
     }
     body = form.toString();
     headers["Content-Type"] = "application/x-www-form-urlencoded";
@@ -157,4 +169,30 @@ export function proxmoxPut(path: string, body?: Params): Promise<unknown> {
 }
 export function proxmoxDelete(path: string, query?: Params): Promise<unknown> {
   return request("DELETE", path, { query });
+}
+
+/**
+ * Open an authenticated WebSocket to the active endpoint.
+ *
+ * Used by the LXC console exec path (termproxy + vncwebsocket): Proxmox exposes
+ * no REST `exec` for containers, so running a command means driving the console
+ * terminal over a websocket. The connection inherits the endpoint's host, port,
+ * API-token Authorization header, and TLS-verification setting, so callers stay
+ * out of the auth/transport details — same as the proxmoxGet/Post helpers.
+ */
+export function openProxmoxWebsocket(path: string, query?: Params): WebSocket {
+  assertSafeApiPath(path);
+  const ep = currentEndpoint();
+  const url = new URL(`wss://${ep.host}:${ep.port}/api2/json${path}`);
+  if (query) {
+    for (const [k, v] of Object.entries(query)) {
+      if (v !== undefined && v !== null && !Array.isArray(v)) {
+        url.searchParams.set(k, String(v));
+      }
+    }
+  }
+  return new WebSocket(url, {
+    headers: { Authorization: authHeader(ep) },
+    dispatcher: dispatcherFor(ep),
+  });
 }

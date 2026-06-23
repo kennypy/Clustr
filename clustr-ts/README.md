@@ -41,7 +41,7 @@ and it **refuses a non-loopback bind without a password** (fail-closed).
 so Claude Desktop always installs it as a *new* version (no uninstall dance).
 Pass an explicit version for a release: `npm run pack -- 0.3.0`.
 
-## Status — 75 tools
+## Status — 78 tools
 
 - ✅ **Multi-host** — manage multiple Proxmox clusters from one instance;
   `list_endpoints` / `add_endpoint` / `remove_endpoint`, plus a `host` arg on
@@ -51,7 +51,7 @@ Pass an explicit version for a release: `npm run pack -- 0.3.0`.
   task follow-up, metrics history (RRD trends), pools, networking + guest IPs,
   pending updates + apt repos, replication, cluster log, and a one-call
   **`cluster_review`**.
-- ✅ Write tools (36): power, snapshots, two-step delete, create, backup/restore,
+- ✅ Write tools (38): power, snapshots, two-step delete, create, backup/restore,
   reconfigure, grow disks, clone, **migrate**, and **downloads**. Same safeguards
   throughout: `confirm=true` on destructive ops, two-step token flows (single-use
   5-min token + exact-identifier match + re-verification), and the hyphenated
@@ -105,6 +105,24 @@ clone, migrate, **backup, and restore** all have both variants.
 These backup/restore tools are TypeScript-only for now (the Python build is at
 36 tools); they can be ported to Python later if needed.
 
+### Run commands inside guests (`run_vm_command` / `run_container_command`)
+Run a shell command *inside* a guest and get stdout/stderr/exit code back —
+e.g. `apt-get update && apt-get -y upgrade`, or a quick `mkdir`. Both are gated
+behind `confirm=true` (preview first, then run) and flagged destructive, since
+arbitrary commands are the most powerful thing the token can do. Commands run
+through `/bin/sh -c`, so `&&`, pipes, and redirection work; run them
+non-interactively (`-y`).
+
+- **`run_vm_command`** (QEMU) uses the **guest agent** (`agent/exec` →
+  poll `agent/exec-status`) for clean, structured output. Needs
+  `qemu-guest-agent` installed and running in the VM, with the Agent option
+  enabled.
+- **`run_container_command`** (LXC) has no exec API to call, so it drives the
+  container **console** (`termproxy` + `vncwebsocket`): it types a
+  marker-wrapped command into the shell and scrapes the output back. That makes
+  it best-effort (expects a normal `/bin/sh` prompt, can't split stdout from
+  stderr) — the container must be running and the token needs `VM.Console`.
+
 ## Develop
 
 ```bash
@@ -132,11 +150,27 @@ larger — that's expected.)
 
 ## Install (what you ship to a user)
 
-1. Create a Proxmox API token (Datacenter → Permissions → API Tokens). Use a
-   `PVEAuditor`-scoped token for read-only.
-2. Double-click `clustr.mcpb` → Claude Desktop opens an install form → enter the
-   host and token → Install. The secret is stored in the OS keychain.
+1. Double-click `clustr.mcpb` → Claude Desktop opens an install form. **All fields
+   are optional** — you can leave them blank and Install. The server boots without
+   a token (you just can't manage anything yet).
+2. Ask Claude *"set up Clustr for &lt;your host IP&gt;"* (or run `/clustr-setup`). It
+   generates a correctly-scoped API token (see below), then you paste the host +
+   token back into the extension's settings form — the secret is stored in your OS
+   keychain. *(Already have a token? Skip step 1's blanks and just fill the form.)*
 3. Ask Claude *"what's running on my Proxmox cluster?"*
+
+### Streamlined token creation — `setup_clustr`
+Step 1 is the part people get wrong (which privileges?). The **`setup_clustr`**
+tool (and the **`/clustr-setup`** prompt) automate it. Give it a host IP and it
+returns your Proxmox login link plus a single copy-paste `pveum` snippet that
+creates a dedicated **`Clustr`** role (least-privilege — covers every management
+tool, including `VM.Monitor`/`VM.Console` for the in-guest exec tools), a
+`clustr@pve` user, an API token, and the matching ACL — then prints the secret to
+paste back. Pass `mode: readonly` for a `PVEAuditor` token instead. Or hand it a
+one-time `admin_user` + `admin_password` (with `confirm=true`) and it provisions
+the token over the API and registers it for you — the password is used once and
+never stored. Because it takes a raw host (not a configured endpoint) and runs
+with zero endpoints set up, it works as your very first call.
 
 ## Configuration
 
