@@ -5,6 +5,6 @@ smoke.mjs
 .env
 .env.*
 !.env.example
-# CLUSTR_ENDPOINTS_FILE stores Proxmox tokens in plaintext — never commit one.
+# CLUSTR_ENDPOINTS_FILE stores Proxmox tokens in plaintext: never commit one.
 *endpoints*.json
 endpoints.json

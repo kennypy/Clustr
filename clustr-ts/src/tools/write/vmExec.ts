@@ -1,5 +1,5 @@
 /**
- * run_vm_command — run a shell command inside a QEMU VM via the guest agent.
+ * run_vm_command: run a shell command inside a QEMU VM via the guest agent.
  *
  * Uses POST /agent/exec (returns a PID) then polls /agent/exec-status until the
  * command exits, returning stdout/stderr/exit code. Requires the
@@ -93,7 +93,7 @@ export function register(server: McpServer): void {
         "Run a shell command inside a running QEMU VM via the QEMU guest agent, " +
         "capturing stdout, stderr, and the exit code. The command runs through " +
         "`/bin/sh -c`, so pipes, `&&`, and redirection work (e.g. " +
-        "`apt-get update && apt-get -y upgrade`). Commands run non-interactively — " +
+        "`apt-get update && apt-get -y upgrade`). Commands run non-interactively: " +
         "pass `-y`/non-interactive flags yourself. Requires `qemu-guest-agent` " +
         "installed and running in the guest. For LXC containers use " +
         "`run_container_command`. confirm=false (default) previews; confirm=true runs.",

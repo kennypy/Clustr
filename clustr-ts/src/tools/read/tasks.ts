@@ -2,7 +2,7 @@
  * Read-only tools for following Proxmox tasks (UPIDs).
  *
  * Every write tool returns a `Task ID: UPID:...`; these let you answer the
- * obvious follow-ups — "is it done?", "did it fail and why?" — instead of the
+ * obvious follow-ups, "is it done?", "did it fail and why?", instead of the
  * UPID being a dead end. The node is parsed out of the UPID, so the caller only
  * needs to paste the UPID a write tool already gave them.
  */
@@ -80,7 +80,7 @@ export function register(server: McpServer): void {
               ? "OK"
               : `error: ${t.status}`;
           lines.push(
-            `${icon} **${t.type}**${t.id ? ` ${t.id}` : ""} — ${state}\n` +
+            `${icon} **${t.type}**${t.id ? ` ${t.id}` : ""} - ${state}\n` +
               `   ${when(t.starttime)} · ${t.user ?? ""}\n` +
               `   \`${t.upid}\``,
           );
@@ -115,7 +115,7 @@ export function register(server: McpServer): void {
           ? "running"
           : ok
             ? "finished OK"
-            : `failed — ${s.exitstatus ?? "unknown"}`;
+            : `failed - ${s.exitstatus ?? "unknown"}`;
         return [
           `## Task ${icon} ${state}\n`,
           `**Type:** ${s.type ?? "?"}${s.id ? ` (${s.id})` : ""}`,
@@ -136,7 +136,7 @@ export function register(server: McpServer): void {
     {
       title: "Get Task Log",
       description:
-        "Get the log output of a Proxmox task by its UPID — use this to see why a " +
+        "Get the log output of a Proxmox task by its UPID, use this to see why a " +
         "backup/restore/create/migration failed.",
       inputSchema: {
         upid: z.string().describe("Task UPID, e.g. 'UPID:pve:....'"),

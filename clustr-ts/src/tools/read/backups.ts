@@ -36,7 +36,7 @@ interface BackupRow {
  *   - file (local/NFS): volid `…/vzdump-qemu-100-…` (VM) vs `…vzdump-lxc-…` (CT)
  *   - PBS: volid `pbs:backup/vm/100/…` (VM) vs `…/ct/…` (CT), plus a `subtype`.
  * Prefer the explicit `subtype` when present; otherwise exclude only entries
- * that clearly look like containers, and include everything else — biasing
+ * that clearly look like containers, and include everything else, biasing
  * toward showing a backup rather than silently hiding a real VM archive.
  */
 export function isVmBackup(r: BackupRow): boolean {
@@ -79,7 +79,7 @@ export function register(server: McpServer): void {
           { content: "backup" },
         )) as BackupRow[];
 
-        // Keep VM backups, drop container ones — across file storages AND PBS
+        // Keep VM backups, drop container ones, across file storages AND PBS
         // (whose volids look like `pbs:backup/vm/100/…`, not `vzdump-qemu-*`).
         rows = rows.filter(isVmBackup);
         if (vmid !== undefined) {
@@ -98,7 +98,7 @@ export function register(server: McpServer): void {
             ? new Date(r.ctime * 1000).toISOString().replace("T", " ").slice(0, 19)
             : "unknown";
           lines.push(
-            `🗄️ **VM ${r.vmid}** — ${gb(r.size ?? 0)} GB — ${when}` +
+            `🗄️ **VM ${r.vmid}** - ${gb(r.size ?? 0)} GB - ${when}` +
               (r.notes ? `\n   📝 ${r.notes}` : "") +
               `\n   \`${r.volid}\``,
           );
@@ -158,7 +158,7 @@ export function register(server: McpServer): void {
             ? new Date(r.ctime * 1000).toISOString().replace("T", " ").slice(0, 19)
             : "unknown";
           lines.push(
-            `🗄️ **CT ${r.vmid}** — ${gb(r.size ?? 0)} GB — ${when}` +
+            `🗄️ **CT ${r.vmid}** - ${gb(r.size ?? 0)} GB - ${when}` +
               (r.notes ? `\n   📝 ${r.notes}` : "") +
               `\n   \`${r.volid}\``,
           );

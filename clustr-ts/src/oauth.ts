@@ -1,11 +1,11 @@
 /**
  * Built-in OAuth 2.1 Authorization Server for the remote (HTTP) connector.
  *
- * Clustr issues its own tokens — no external provider to run. A single
+ * Clustr issues its own tokens: no external provider to run. A single
  * configured login (CLUSTR_AUTH_USERNAME / CLUSTR_AUTH_PASSWORD) gates the
  * authorize step; the rest (PKCE, dynamic client registration, metadata) is the
  * MCP SDK's standard machinery. Tokens live in process memory, so a restart
- * means clients re-authorize — fine for a single self-hosted instance.
+ * means clients re-authorize, fine for a single self-hosted instance.
  *
  * This makes the remote connector safe to put behind a tunnel: Claude does the
  * normal OAuth dance, the user logs in once, and /mcp requires a valid token.
@@ -119,7 +119,7 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
   readonly clientsStore: OAuthRegisteredClientsStore = {
     getClient: (id) => this.clients.get(id),
     registerClient: (client) => {
-      // Open endpoint — cap total registrations, evicting the oldest if needed.
+      // Open endpoint: cap total registrations, evicting the oldest if needed.
       if (this.clients.size >= MAX_CLIENTS) {
         const oldest = this.clients.keys().next().value;
         if (oldest) this.clients.delete(oldest);
@@ -167,7 +167,7 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
   }
 
   /** Called by the POST /login route. Validates the password, mints a code, and
-   *  redirects back to the client — or re-renders the form on failure. After
+   *  redirects back to the client, or re-renders the form on failure. After
    *  MAX_LOGIN_ATTEMPTS wrong guesses the login id is burned (forces a fresh,
    *  rate-limited /authorize), which is what bounds brute-force. */
   completeLogin(loginId: string, password: string, res: Response): void {
@@ -175,7 +175,7 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
     if (!p || p.expiresAt < now()) {
       this.pending.delete(loginId);
       res.status(400).setHeader("Content-Type", "text/html; charset=utf-8");
-      res.send(loginPage({ loginId: "", error: "Login expired — start again from Claude." }));
+      res.send(loginPage({ loginId: "", error: "Login expired. Start again from Claude." }));
       return;
     }
     if (!passwordMatches(this.cfg.password, password)) {
@@ -183,7 +183,7 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
       if (p.attempts >= MAX_LOGIN_ATTEMPTS) {
         this.pending.delete(loginId); // burn it
         res.status(429).setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(loginPage({ loginId: "", error: "Too many attempts — start again from Claude." }));
+        res.send(loginPage({ loginId: "", error: "Too many attempts. Start again from Claude." }));
         return;
       }
       res.status(401).setHeader("Content-Type", "text/html; charset=utf-8");
@@ -309,7 +309,7 @@ export class ClustrOAuthProvider implements OAuthServerProvider {
   }
 }
 
-/** Global fixed-window throttle for the /login endpoint (not per-IP — see note
+/** Global fixed-window throttle for the /login endpoint (not per-IP, see note
  *  above). Exported pure so it's unit-testable. */
 export function makeLoginThrottle(
   windowMs = LOGIN_WINDOW_MS,
@@ -360,7 +360,7 @@ function loginPage(opts: {
       try {
         where = ` and return you to <strong>${escapeHtml(new URL(redirectUri).host)}</strong>`;
       } catch {
-        /* malformed redirect_uri — omit the host line */
+        /* malformed redirect_uri, omit the host line */
       }
     }
     consent =
@@ -381,7 +381,7 @@ function loginPage(opts: {
        </form>`
     : "";
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Clustr — Sign in</title></head>
+    <title>Clustr: Sign in</title></head>
     <body style="font-family:system-ui,sans-serif;background:#f4f6fb;margin:0">
       <div style="max-width:360px;margin:12vh auto;background:#fff;padding:28px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
         <h1 style="font-size:20px;margin:0 0 4px">Clustr</h1>
@@ -407,7 +407,7 @@ export function mountOAuth(
   const authorizeThrottle = makeLoginThrottle(LOGIN_WINDOW_MS, AUTHORIZE_MAX_PER_WINDOW);
   app.use((req: Request, res: Response, next: express.NextFunction) => {
     if (req.path === "/authorize" && authorizeThrottle()) {
-      res.status(429).type("text/plain").send("Too many authorization requests — retry shortly.");
+      res.status(429).type("text/plain").send("Too many authorization requests, retry shortly.");
       return;
     }
     next();
@@ -432,7 +432,7 @@ export function mountOAuth(
       if (throttled()) {
         res.status(429).setHeader("Content-Type", "text/html; charset=utf-8");
         res.send(
-          loginPage({ loginId: "", error: "Too many attempts — wait a minute and retry." }),
+          loginPage({ loginId: "", error: "Too many attempts. Wait a minute and retry." }),
         );
         return;
       }

@@ -44,7 +44,7 @@ export function register(server: McpServer): void {
         if (description !== undefined) body.description = description;
         if (tags !== undefined) body.tags = tags;
         if (Object.keys(body).length === 0) {
-          throw new ProxmoxError("Nothing to change — provide at least one field.");
+          throw new ProxmoxError("Nothing to change. Provide at least one field.");
         }
         await proxmoxPut(`/nodes/${node}/lxc/${ctid}/config`, body);
         return (
@@ -59,7 +59,7 @@ export function register(server: McpServer): void {
     {
       title: "Resize Container Disk (Grow)",
       description:
-        "Grow an LXC container mount point (usually 'rootfs'). Grow-only — " +
+        "Grow an LXC container mount point (usually 'rootfs'). Grow-only: " +
         "Proxmox cannot shrink. Size is an increment like '+5G' or an absolute " +
         "target like '16G'.",
       inputSchema: {

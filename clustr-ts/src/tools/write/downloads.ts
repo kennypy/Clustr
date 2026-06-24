@@ -1,5 +1,5 @@
 /**
- * Fetch templates and ISOs onto storage — so Claude can get what create needs,
+ * Fetch templates and ISOs onto storage, so Claude can get what create needs,
  * instead of telling you to download it by hand.
  *
  *   list_available_templates → the appliance index (pveam) of downloadable CT
@@ -24,7 +24,7 @@ const WRITE = { readOnlyHint: false, destructiveHint: false } as const;
 /**
  * Reduce a requested/derived download filename to a single safe path segment:
  * strip any directory parts and traversal so it can't point outside the target
- * storage (Proxmox validates too — this is defense-in-depth). Exported for tests.
+ * storage (Proxmox validates too; this is defense-in-depth). Exported for tests.
  */
 export function sanitizeDownloadName(raw: string): string {
   const base = raw.split(/[/\\]/).pop() ?? "";
@@ -51,7 +51,7 @@ export function register(server: McpServer): void {
       description:
         "List LXC container templates available to download from the Proxmox " +
         "appliance index (pveam). Use 'search' to narrow (e.g. 'debian', " +
-        "'ubuntu') — the full list is long. Pass a returned 'template' name to " +
+        "'ubuntu'); the full list is long. Pass a returned 'template' name to " +
         "download_template.",
       inputSchema: {
         node: z.string().describe("Node name (e.g. 'pve')"),
@@ -81,7 +81,7 @@ export function register(server: McpServer): void {
           })\n`,
         ];
         for (const r of capped) {
-          lines.push(`- \`${r.template}\` — ${r.headline ?? r.os ?? ""}`);
+          lines.push(`- \`${r.template}\` - ${r.headline ?? r.os ?? ""}`);
         }
         if (rows.length > capped.length) {
           lines.push("\nNarrow with `search` to see more.");
@@ -127,7 +127,7 @@ export function register(server: McpServer): void {
     {
       title: "Download ISO/Template from URL",
       description:
-        "Download a file from a URL directly onto a storage — typically an ISO " +
+        "Download a file from a URL directly onto a storage, typically an ISO " +
         "(content=iso) or a container template (content=vztmpl). The storage " +
         "must accept that content type.",
       inputSchema: {

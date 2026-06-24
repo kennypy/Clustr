@@ -142,7 +142,7 @@ export function register(server: McpServer): void {
 
         if (!args.confirm) {
           return (
-            `🔎 **Review — VM not yet created.**\n\n${config}\n` +
+            `🔎 **Review: VM not yet created.**\n\n${config}\n` +
             "Call `create_vm` again with the same arguments plus `confirm=true` to create it."
           );
         }
@@ -164,11 +164,11 @@ export function register(server: McpServer): void {
 
         let startLine = "";
         if (startStatus === "ok") {
-          startLine = "▶️ Start requested — the VM is booting.\n";
+          startLine = "▶️ Start requested. The VM is booting.\n";
         } else if (startStatus) {
           startLine =
             `⚠️ The VM was created but the start request failed: ${startStatus.slice(8)}. ` +
-            "This usually means the disk is still being allocated — wait a moment, then call `start_vm`.\n";
+            "This usually means the disk is still being allocated; wait a moment, then call `start_vm`.\n";
         }
 
         return (

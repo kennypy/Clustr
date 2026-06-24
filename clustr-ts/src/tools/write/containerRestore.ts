@@ -212,9 +212,9 @@ export function register(server: McpServer): void {
           force,
         );
         const head = overwrite
-          ? `⚠️ **Container Restore Request — Step 1 of 2 (OVERWRITE)**\n\nThis will ` +
+          ? `⚠️ **Container Restore Request: Step 1 of 2 (OVERWRITE)**\n\nThis will ` +
             `**destroy existing container ${ctid}** on **${node}** and replace it with the backup.`
-          : `⚠️ **Container Restore Request — Step 1 of 2**\n\nThis will restore the backup ` +
+          : `⚠️ **Container Restore Request: Step 1 of 2**\n\nThis will restore the backup ` +
             `into **new container ${ctid}** on **${node}**.`;
         return (
           `${head}\n\n` +

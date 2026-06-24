@@ -1,5 +1,5 @@
 /**
- * cluster_review — one read-only call that produces a comprehensive Proxmox
+ * cluster_review: one read-only call that produces a comprehensive Proxmox
  * review: cluster/quorum, per-node usage + version, disk & pool health (SMART /
  * ZFS), networking, storage, every VM and container (with disk/uptime/onboot/
  * agent detail), a snapshot inventory, backup coverage, and recent task
@@ -125,7 +125,7 @@ async function clusterReview(): Promise<string> {
   const online = nodes.filter((n) => n.status === "online").length;
   out.push("## Cluster");
   if (cl) {
-    out.push(`- **${cl.name ?? "cluster"}** — quorum: ${cl.quorate ? "✅ quorate" : "❌ NOT quorate"}`);
+    out.push(`- **${cl.name ?? "cluster"}** - quorum: ${cl.quorate ? "✅ quorate" : "❌ NOT quorate"}`);
     if (!cl.quorate) flags.push("🔴 Cluster is **not quorate**.");
   } else {
     out.push("- Single node (no cluster) or status unavailable.");
@@ -148,7 +148,7 @@ async function clusterReview(): Promise<string> {
     const diskPct = pct(n.disk ?? 0, n.maxdisk ?? 0);
     const icon = n.status === "online" ? "🟢" : "🔴";
     out.push(
-      `${icon} **${n.node}** — CPU ${cpuPct}% · RAM ${gb(n.mem ?? 0)}/${gb(n.maxmem ?? 0)} GB (${memPct}%)` +
+      `${icon} **${n.node}** - CPU ${cpuPct}% · RAM ${gb(n.mem ?? 0)}/${gb(n.maxmem ?? 0)} GB (${memPct}%)` +
         ` · root ${gb(n.disk ?? 0)}/${gb(n.maxdisk ?? 0)} GB (${diskPct}%)` +
         ` · up ${days(n.uptime ?? 0)}d` +
         (st.pveversion ? ` · ${st.pveversion}` : ""),
@@ -181,7 +181,7 @@ async function clusterReview(): Promise<string> {
       const { count, notable } = await pendingUpdates(n.node);
       out.push(
         `- **${n.node}** updates: ${count === 0 ? "✅ up to date" : `⬆️ ${count} pending`}` +
-          (notable.length ? ` (incl. ${notable.join(", ")} — reboot)` : ""),
+          (notable.length ? ` (incl. ${notable.join(", ")}, reboot)` : ""),
       );
       if (notable.length) flags.push(`🟡 ${n.node}: kernel/PVE update pending (reboot to apply).`);
     } catch {
@@ -213,7 +213,7 @@ async function clusterReview(): Promise<string> {
       const wear = d.wearout !== undefined && d.wearout !== "N/A" ? ` · wearout ${d.wearout}` : "";
       const hIcon = /pass|ok/i.test(health) ? "🟢" : /unknown/i.test(health) ? "⚪" : "🔴";
       out.push(
-        `- ${hIcon} ${d.devpath ?? "?"} — ${d.model ?? d.type ?? "?"} — ${gb(d.size ?? 0)} GB — SMART: ${health}${wear}`,
+        `- ${hIcon} ${d.devpath ?? "?"} - ${d.model ?? d.type ?? "?"} - ${gb(d.size ?? 0)} GB - SMART: ${health}${wear}`,
       );
       if (!/pass|ok|unknown/i.test(health)) {
         flags.push(`🔴 Disk **${d.devpath}** on ${n.node} SMART status: ${health}.`);
@@ -223,7 +223,7 @@ async function clusterReview(): Promise<string> {
       const h = String(z.health ?? "?");
       const zIcon = /online/i.test(h) ? "🟢" : "🔴";
       out.push(
-        `- ${zIcon} ZFS **${z.name}** — ${h} — ${gb(z.alloc ?? 0)}/${gb(z.size ?? 0)} GB` +
+        `- ${zIcon} ZFS **${z.name}** - ${h} - ${gb(z.alloc ?? 0)}/${gb(z.size ?? 0)} GB` +
           (z.frag !== undefined ? ` · frag ${z.frag}%` : ""),
       );
       if (!/online/i.test(h)) flags.push(`🔴 ZFS pool **${z.name}** on ${n.node} is ${h}.`);
@@ -242,7 +242,7 @@ async function clusterReview(): Promise<string> {
     for (const i of relevant) {
       const addr = i.cidr || i.address || "no IP";
       const ports = i.bridge_ports || i.slaves || "—";
-      out.push(`- **${i.iface}** (${i.type}) — ${addr} — ports: ${ports} — ${i.active ? "active" : "inactive"}`);
+      out.push(`- **${i.iface}** (${i.type}) - ${addr} - ports: ${ports} - ${i.active ? "active" : "inactive"}`);
       if (i.autostart && !i.active) {
         flags.push(`🟠 ${n.node}: bridge **${i.iface}** is set to autostart but is down.`);
       }
@@ -258,7 +258,7 @@ async function clusterReview(): Promise<string> {
     seen.add(s.storage);
     const usedPct = pct(s.disk ?? 0, s.maxdisk ?? 0);
     out.push(
-      `- **${s.storage}** (${s.plugintype ?? s.type ?? "?"}${s.shared ? ", shared" : ""}) — ` +
+      `- **${s.storage}** (${s.plugintype ?? s.type ?? "?"}${s.shared ? ", shared" : ""}) - ` +
         `${gb(s.disk ?? 0)}/${gb(s.maxdisk ?? 0)} GB (${usedPct}%)`,
     );
     if (usedPct > 85) flags.push(`🟠 Storage **${s.storage}** is ${usedPct}% full.`);
@@ -268,7 +268,7 @@ async function clusterReview(): Promise<string> {
   // ---- Guests --------------------------------------------------------------
   const guestLine = (g: Any, kind: string): string => {
     const e = enrichOf(g);
-    if (g.template) return `📋 ${g.vmid} ${g.name ?? ""} (${g.node}) — ${kind} template`;
+    if (g.template) return `📋 ${g.vmid} ${g.name ?? ""} (${g.node}) - ${kind} template`;
     const icon = g.status === "running" ? "🟢" : "⚫";
     const parts: string[] = [];
     if (g.status === "running") {
@@ -285,7 +285,7 @@ async function clusterReview(): Promise<string> {
     parts.push(`onboot ${e.onboot ? "✓" : "✗"}`);
     if (e.agent !== undefined) parts.push(`agent ${e.agent ? "✓" : "✗"}`);
     if (e.snaps.length) parts.push(`📸${e.snaps.length}`);
-    return `${icon} ${g.vmid} ${g.name ?? ""} (${g.node}) — ${g.status} — ${parts.join(" · ")}`;
+    return `${icon} ${g.vmid} ${g.name ?? ""} (${g.node}) - ${g.status} - ${parts.join(" · ")}`;
   };
   const sortById = (a: Any, b: Any) => Number(a.vmid) - Number(b.vmid);
 
@@ -320,12 +320,12 @@ async function clusterReview(): Promise<string> {
     const ageDays = Math.round((nowSec - oldest) / 86400);
     const stale = ageDays > 7;
     out.push(
-      `- ${stale ? "⚠️ " : ""}${g.vmid} ${g.name ?? ""} — ${e.snaps.length} snapshot(s), oldest ${ageDays}d` +
+      `- ${stale ? "⚠️ " : ""}${g.vmid} ${g.name ?? ""} - ${e.snaps.length} snapshot(s), oldest ${ageDays}d` +
         ` (${e.snaps.map((s) => s.name).join(", ")})`,
     );
     if (stale) {
       flags.push(
-        `🟡 ${g.vmid} ${g.name ?? ""} has a ${ageDays}d-old snapshot — snapshots aren't backups and bloat storage.`,
+        `🟡 ${g.vmid} ${g.name ?? ""} has a ${ageDays}d-old snapshot. Snapshots aren't backups and bloat storage.`,
       );
     }
   }
@@ -333,7 +333,7 @@ async function clusterReview(): Promise<string> {
   out.push("");
 
   // ---- Backups -------------------------------------------------------------
-  // Coverage comes from the *job config* (/cluster/backup) — instant, and the
+  // Coverage comes from the *job config* (/cluster/backup), instant, and the
   // right answer to "is it backed up on a schedule". Archive ages are a
   // best-effort extra, timeout-bounded so a PBS chunk-store walk can't hang the
   // whole review (it previously took minutes).
@@ -342,7 +342,7 @@ async function clusterReview(): Promise<string> {
   const enabledJobs = jobs.filter((j) => j.enabled !== 0);
   if (!jobs.length) {
     out.push("- ⚠️ No scheduled backup jobs configured (Datacenter → Backup is empty).");
-    flags.push("🔴 No scheduled backup jobs exist — nothing is being backed up automatically.");
+    flags.push("🔴 No scheduled backup jobs exist. Nothing is being backed up automatically.");
   } else {
     out.push(
       `- ${jobs.length} backup job(s), ${enabledJobs.length} enabled: ` +
@@ -371,7 +371,7 @@ async function clusterReview(): Promise<string> {
     );
   }
 
-  // Archive ages — best-effort, each storage capped so PBS can't stall us.
+  // Archive ages: best-effort, each storage capped so PBS can't stall us.
   const backupStores = stores.filter((s) => String(s.content ?? "").includes("backup"));
   const latestByVmid = new Map<number, number>();
   let totalBackups = 0;
@@ -408,7 +408,7 @@ async function clusterReview(): Promise<string> {
     if (old.length) out.push(`- ⚠️ Newest backup is >7d old for: ${old.join("; ")}`);
   }
   if (timedOut) {
-    out.push("- (Archive enumeration timed out on a slow store, e.g. PBS — coverage above is from job config.)");
+    out.push("- (Archive enumeration timed out on a slow store, e.g. PBS; coverage above is from job config.)");
   }
   out.push("");
 
@@ -420,7 +420,7 @@ async function clusterReview(): Promise<string> {
     for (const t of tasks) {
       anyFail = true;
       out.push(
-        `❌ ${n.node} — **${t.type}**${t.id ? ` ${t.id}` : ""} — ${t.status} (${dateOf(t.starttime)})`,
+        `❌ ${n.node} - **${t.type}**${t.id ? ` ${t.id}` : ""} - ${t.status} (${dateOf(t.starttime)})`,
       );
     }
   }
@@ -431,7 +431,7 @@ async function clusterReview(): Promise<string> {
   // ---- Attention -----------------------------------------------------------
   out.push("## ⚠️ Attention");
   if (flags.length) out.push(...flags.map((f) => `- ${f}`));
-  else out.push("- ✅ Nothing flagged — cluster looks healthy.");
+  else out.push("- ✅ Nothing flagged, cluster looks healthy.");
 
   return out.join("\n");
 }
@@ -446,7 +446,7 @@ export function register(server: McpServer): void {
         "CPU/memory/disk usage and version, disk & pool health (SMART/ZFS), " +
         "networking, storage usage, every VM and container (with disk/uptime/" +
         "onboot/guest-agent detail), a snapshot inventory, backup coverage (flags " +
-        "guests with no recent backup), and recent task failures — ending with a " +
+        "guests with no recent backup), and recent task failures, ending with a " +
         "summary of things to look at. Use this whenever the user asks for a " +
         "review, health check, audit, or overview of the cluster.",
       annotations: READ,

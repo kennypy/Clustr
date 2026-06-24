@@ -1,13 +1,13 @@
 /**
  * Write tool: create an LXC container backup via vzdump.
  *
- * vzdump is guest-type-agnostic — the same `/nodes/{node}/vzdump` call backs up
+ * vzdump is guest-type-agnostic: the same `/nodes/{node}/vzdump` call backs up
  * containers and VMs identically (the API param is `vmid` for both). This tool
  * exists as the container-native counterpart to `create_vm_backup` so the model
  * actually discovers it for CTs instead of reaching for a VM-typed tool.
  *
  * Additive (writes a new archive, changes nothing on the running CT), so no
- * confirm gate. Mode `snapshot` is the default — live, no downtime; `stop`/
+ * confirm gate. Mode `snapshot` is the default: live, no downtime; `stop`/
  * `suspend` trade availability for consistency. The target storage must support
  * backup content.
  */

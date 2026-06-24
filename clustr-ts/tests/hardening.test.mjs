@@ -11,7 +11,7 @@ test("login throttle: blocks past the per-window cap", () => {
   assert.equal(throttled(), false); // 1
   assert.equal(throttled(), false); // 2
   assert.equal(throttled(), false); // 3
-  assert.equal(throttled(), true); // 4 — over cap
+  assert.equal(throttled(), true); // 4, over cap
   assert.equal(throttled(), true); // stays blocked in-window
 });
 

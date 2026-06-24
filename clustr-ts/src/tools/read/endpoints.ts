@@ -43,7 +43,7 @@ export function register(server: McpServer): void {
         const lines = [`## Endpoints (${eps.length})\n`];
         for (const e of eps) {
           lines.push(
-            `- **${e.name}**${e.name === def ? " (default)" : ""} — ${e.user}@${e.host}:${e.port}` +
+            `- **${e.name}**${e.name === def ? " (default)" : ""} - ${e.user}@${e.host}:${e.port}` +
               (e.verifySsl ? "" : " (TLS verify off)"),
           );
         }

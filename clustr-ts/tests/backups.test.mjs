@@ -20,7 +20,7 @@ test("file-based vzdump container backup is dropped", () => {
 });
 
 test("PBS VM backup is kept (regression: previously hidden)", () => {
-  // No 'qemu' in the volid — the old filter dropped these.
+  // No 'qemu' in the volid: the old filter dropped these.
   assert.equal(
     isVmBackup({ volid: "pbs:backup/vm/100/2026-06-11T00:00:00Z", subtype: "qemu" }),
     true,

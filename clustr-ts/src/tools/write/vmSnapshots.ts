@@ -113,7 +113,7 @@ export function register(server: McpServer): void {
         if (!ok) {
           return needsConfirm(
             "roll back to snapshot",
-            `**${snapname}** on VM ${id} (${n}) — discarding all later changes`,
+            `**${snapname}** on VM ${id} (${n}), discarding all later changes`,
           );
         }
         const task = await proxmoxPost(

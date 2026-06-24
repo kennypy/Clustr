@@ -1,5 +1,5 @@
 /**
- * Two-step LXC container deletion — same pattern as vmDelete, keyed on hostname.
+ * Two-step LXC container deletion: same pattern as vmDelete, keyed on hostname.
  */
 
 import { randomBytes } from "node:crypto";
@@ -111,7 +111,7 @@ async function confirmContainerDelete(
   const currentHostname = config.hostname ?? `ct-${ctid}`;
   if (currentHostname !== name) {
     throw new ProxmoxError(
-      `Container ${ctid} is now named '${currentHostname}', not '${name}' — the ` +
+      `Container ${ctid} is now named '${currentHostname}', not '${name}'. The ` +
         "CTID may have been reused since the delete request. Nothing was deleted. " +
         "Call container_delete_request again.",
     );
@@ -145,7 +145,7 @@ export function register(server: McpServer): void {
         const { token, hostname } = await requestContainerDelete(node, ctid);
         const hint = await backupBeforeDestroyHint(node, "container");
         return (
-          `⚠️ **Container Deletion Request — Step 1 of 2**\n\n` +
+          `⚠️ **Container Deletion Request: Step 1 of 2**\n\n` +
           `Container **${hostname}** (ID: ${ctid}) on node **${node}** is queued for deletion.\n\n` +
           "To permanently delete it, call `container_delete_confirm` with:\n" +
           `- \`confirmation_token\`: \`${token}\`\n` +

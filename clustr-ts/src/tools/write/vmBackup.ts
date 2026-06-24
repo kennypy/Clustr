@@ -2,7 +2,7 @@
  * Write tool: create a VM backup via vzdump.
  *
  * Additive (it writes a new archive, changes nothing on the running VM), so no
- * confirm gate. Mode `snapshot` is the default — a live backup with no downtime;
+ * confirm gate. Mode `snapshot` is the default: a live backup with no downtime;
  * `stop`/`suspend` trade availability for consistency. The target storage must
  * support backup content.
  */

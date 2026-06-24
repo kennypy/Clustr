@@ -1,6 +1,6 @@
 /**
- * Read-only tools for enumerating what's *on* a storage — ISOs, container
- * templates, disk images, snippets — not just its capacity. These close the
+ * Read-only tools for enumerating what's *on* a storage: ISOs, container
+ * templates, disk images, snippets, not just its capacity. These close the
  * loop with create_vm (needs an ISO path) and create_container (needs a template
  * path): now those paths can be discovered, not guessed.
  */
@@ -36,8 +36,8 @@ const CONTENT_TYPES = [
 ] as const;
 
 /**
- * Fetch content of a given type from one storage, or — when no storage is
- * given — from every storage on the node that advertises that content type.
+ * Fetch content of a given type from one storage, or, when no storage is
+ * given, from every storage on the node that advertises that content type.
  */
 async function contentFor(
   node: string,
@@ -183,8 +183,8 @@ export function register(server: McpServer): void {
         );
         const lines = [`## Content on ${storage} (${rows.length})\n`];
         for (const r of rows) {
-          const size = r.size ? ` — ${gb(r.size)} GB` : "";
-          const owner = r.vmid ? ` — VM ${r.vmid}` : "";
+          const size = r.size ? ` - ${gb(r.size)} GB` : "";
+          const owner = r.vmid ? ` - VM ${r.vmid}` : "";
           lines.push(
             `- [${r.content}] \`${r.volid}\`${size}${owner}` +
               (r.volid ? `\n   ${shortName(String(r.volid))}` : ""),

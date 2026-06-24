@@ -55,8 +55,8 @@ export function register(server: McpServer): void {
         for (const ct of rows) {
           const icon = ct.status === "running" ? "🟢" : "⚫";
           lines.push(
-            `${icon} **${ctid(ct)} — ${ct.name ?? "unnamed"}** ` +
-              `(${ct.node ?? filter ?? "unknown"}) — ${ct.status}\n` +
+            `${icon} **${ctid(ct)} - ${ct.name ?? "unnamed"}** ` +
+              `(${ct.node ?? filter ?? "unknown"}) - ${ct.status}\n` +
               `   CPU: ${pct(ct.cpu ?? 0)}%  ` +
               `RAM: ${mb(ct.mem ?? 0)} / ${mb(ct.maxmem ?? 0)} MB  ` +
               `Uptime: ${hours(ct.uptime ?? 0)}h`,
@@ -164,7 +164,7 @@ export function register(server: McpServer): void {
         const lines = [`## Snapshots for Container ${id}\n`];
         for (const s of snaps) {
           lines.push(
-            `📸 **${s.name}**` + (s.description ? ` — ${s.description}` : ""),
+            `📸 **${s.name}**` + (s.description ? ` - ${s.description}` : ""),
           );
         }
         return lines.join("\n");

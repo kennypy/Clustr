@@ -23,7 +23,7 @@ ENV/
 .coverage
 htmlcov/
 
-# Secrets and runtime host config (generated per install — never commit)
+# Secrets and runtime host config (generated per install, never commit)
 .env
 proxmox-config/config.json
 # CLUSTR_ENDPOINTS_FILE stores Proxmox API tokens in plaintext

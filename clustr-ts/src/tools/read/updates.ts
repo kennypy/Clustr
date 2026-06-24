@@ -2,7 +2,7 @@
  * Read-only tool: is the connected Proxmox cluster running the latest release?
  *
  * Reads the running version from the Proxmox API (/version) and compares it to
- * the latest pve-manager version in Proxmox's APT repository — the structured
+ * the latest pve-manager version in Proxmox's APT repository, the structured
  * Packages index apt itself consumes. Track-aware: it maps the running major to
  * its Debian codename and queries that track, so it reports the precise
  * point-release apt would install and never false-positives on an
@@ -100,7 +100,7 @@ export function register(server: McpServer): void {
       title: "Check for Proxmox Updates",
       description:
         "Check for Proxmox updates. Leads with the LOCAL pending-package count " +
-        "per node (the Node → Updates panel — instant, no internet from this " +
+        "per node (the Node → Updates panel, instant, no internet from this " +
         "tool) and highlights kernel/PVE updates. Also makes a best-effort " +
         "comparison to the latest release on your track via the public package " +
         "index (skipped cleanly if that can't be reached).",
@@ -123,7 +123,7 @@ export function register(server: McpServer): void {
             else
               lines.push(
                 `- ${n.node}: ⬆️ ${count} pending` +
-                  (notable.length ? ` (incl. ${notable.join(", ")} — reboot likely)` : ""),
+                  (notable.length ? ` (incl. ${notable.join(", ")}, reboot likely)` : ""),
               );
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -138,11 +138,11 @@ export function register(server: McpServer): void {
             lines.push(
               `\n**Latest on your track (pve-no-subscription):** ${latestVer}` +
                 (isLess(runningT, versionTuple(latestVer))
-                  ? ` — ⬆️ newer than your ${runningVer}.`
-                  : " — you're current."),
+                  ? `, ⬆️ newer than your ${runningVer}.`
+                  : ", you're current."),
             );
           }
-          // If the external lookup failed, we simply omit it — the local count above is the answer.
+          // If the external lookup failed, we simply omit it. The local count above is the answer.
         }
         lines.push("\nRun `apt update && apt full-upgrade` on a node to apply (read upgrade notes first).");
         return lines.join("\n");

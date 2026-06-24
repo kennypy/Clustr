@@ -1,5 +1,5 @@
 /**
- * Clustr configuration — read once from the environment.
+ * Clustr configuration: read once from the environment.
  *
  * The desktop extension (.mcpb) injects these from the install-time settings
  * form via the manifest's user_config -> env mapping, so the user never edits a

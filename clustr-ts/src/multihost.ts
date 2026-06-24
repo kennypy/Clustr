@@ -32,7 +32,7 @@ export function invalidPathIdentifier(args: Record<string, unknown>): string | n
     if (typeof v === "string" && v.length > 0 && !SAFE_ID.test(v)) {
       return (
         `Invalid \`${f}\`: '${v}'. Proxmox ${f} names are letters, digits, dot, ` +
-        "hyphen, underscore — no '/', spaces, or other characters."
+        "hyphen, underscore: no '/', spaces, or other characters."
       );
     }
   }
@@ -50,7 +50,7 @@ const hostField = z
 
 export function patchForMultiHost(server: McpServer): void {
   // Always inject `host` (optional) so endpoints added at runtime are targetable
-  // without restarting. Single-host setups simply never pass it — it resolves to
+  // without restarting. Single-host setups simply never pass it, it resolves to
   // the sole/default endpoint.
   const original = server.registerTool.bind(server) as (
     name: string,

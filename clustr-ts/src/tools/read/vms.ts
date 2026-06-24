@@ -18,7 +18,7 @@ const READ = {
 /**
  * Interpret the qemu `agent` config value. Proxmox returns it as a string
  * ("1" / "0" / "enabled=1,fstrim_cloned_disks=1"), so a plain truthiness check
- * is wrong — treat it as enabled only when the leading flag is 1.
+ * is wrong. Treat it as enabled only when the leading flag is 1.
  */
 export function agentEnabled(agent: unknown): boolean {
   const value = String(agent ?? "")
@@ -74,8 +74,8 @@ export function register(server: McpServer): void {
         for (const vm of rows) {
           const icon = vm.status === "running" ? "🟢" : "⚫";
           lines.push(
-            `${icon} **${vmid(vm)} — ${vm.name ?? "unnamed"}** ` +
-              `(${vm.node ?? filter ?? "unknown"}) — ${vm.status}\n` +
+            `${icon} **${vmid(vm)} - ${vm.name ?? "unnamed"}** ` +
+              `(${vm.node ?? filter ?? "unknown"}) - ${vm.status}\n` +
               `   CPU: ${pct(vm.cpu ?? 0)}%  ` +
               `RAM: ${mb(vm.mem ?? 0)} / ${mb(vm.maxmem ?? 0)} MB  ` +
               `Uptime: ${hours(vm.uptime ?? 0)}h`,
@@ -174,7 +174,7 @@ export function register(server: McpServer): void {
         for (const s of snaps) {
           lines.push(
             `📸 **${s.name}**` +
-              (s.description ? ` — ${s.description}` : "") +
+              (s.description ? ` - ${s.description}` : "") +
               (s.vmstate ? " (includes RAM state)" : ""),
           );
         }

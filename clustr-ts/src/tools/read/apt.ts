@@ -1,5 +1,5 @@
 /**
- * Local APT tools — the cheap, no-internet endpoints the Node → Updates panel
+ * Local APT tools: the cheap, no-internet endpoints the Node → Updates panel
  * uses. list_node_updates answers "what updates are pending" without reaching
  * out to the internet (unlike the roadmap fetch in check_proxmox_updates).
  */
@@ -43,7 +43,7 @@ export function register(server: McpServer): void {
       title: "List Pending Updates",
       description:
         "List pending APT package updates on a node (the Node → Updates panel, " +
-        "via /nodes/{node}/apt/update). Local and instant — no internet needed. " +
+        "via /nodes/{node}/apt/update). Local and instant, no internet needed. " +
         "Highlights kernel / pve-manager updates.",
       inputSchema: { node: z.string().describe("Node name (e.g. 'pve')") },
       annotations: READ,
@@ -51,7 +51,7 @@ export function register(server: McpServer): void {
     async ({ node }) =>
       safe("list_node_updates", async () => {
         const pkgs = (await proxmoxGet(`/nodes/${node}/apt/update`)) as AptPkg[];
-        if (!pkgs.length) return `✅ ${node} is up to date — no pending package updates.`;
+        if (!pkgs.length) return `✅ ${node} is up to date: no pending package updates.`;
         const kernelish = pkgs.filter((p) =>
           /kernel|pve-manager/.test(String(p.Package ?? "")),
         );
@@ -92,7 +92,7 @@ export function register(server: McpServer): void {
           for (const r of std) {
             const status =
               r.status === 1 ? "✅ enabled" : r.status === 0 ? "⚫ disabled" : "— not configured";
-            lines.push(`- ${r.name ?? r.handle} (${r.handle}) — ${status}`);
+            lines.push(`- ${r.name ?? r.handle} (${r.handle}) - ${status}`);
           }
         }
         const errors = (data.errors ?? []) as Record<string, any>[];

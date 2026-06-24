@@ -1,5 +1,5 @@
 /**
- * Cluster-level reads: replication jobs and the recent cluster log — both cheap
+ * Cluster-level reads: replication jobs and the recent cluster log, both cheap
  * endpoints the UI surfaces directly.
  */
 
@@ -39,7 +39,7 @@ export function register(server: McpServer): void {
         for (const j of jobs) {
           const off = j.disable ? " (disabled)" : "";
           lines.push(
-            `- **${j.id}**${off} — guest ${j.guest} → ${j.target} · schedule ${j.schedule ?? "—"}`,
+            `- **${j.id}**${off} - guest ${j.guest} → ${j.target} · schedule ${j.schedule ?? "—"}`,
           );
         }
         return lines.join("\n");

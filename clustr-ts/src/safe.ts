@@ -1,10 +1,10 @@
 /**
  * Shared tool helpers.
  *
- * `safe` wraps a tool body so no exception escapes to the MCP caller — every
+ * `safe` wraps a tool body so no exception escapes to the MCP caller: every
  * failure becomes actionable text. `text` builds the MCP result shape, and
- * `needsConfirm` is the standard "not executed — confirm first" message for
- * destructive tools (mirrors the Python implementation).
+ * `needsConfirm` is the standard "not executed, confirm first" message for
+ * destructive tools.
  */
 
 import { ProxmoxError } from "./proxmox.js";
@@ -35,7 +35,7 @@ export async function safe(
 
 export function needsConfirm(action: string, target: string): string {
   return (
-    `🔎 **Review — not executed.** This will ${action} ${target}, which is ` +
+    `🔎 **Review: not executed.** This will ${action} ${target}, which is ` +
     `destructive and may cause data loss. Call this tool again with the same ` +
     "arguments plus `confirm=true` to proceed."
   );

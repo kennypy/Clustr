@@ -1,4 +1,4 @@
-# Privacy Policy — Clustr
+# Privacy Policy: Clustr
 
 _Last updated: 2025_
 

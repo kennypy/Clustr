@@ -1,5 +1,5 @@
 /**
- * Read the scheduled backup *jobs* (Datacenter → Backup) from /cluster/backup —
+ * Read the scheduled backup *jobs* (Datacenter → Backup) from /cluster/backup:
  * the small, instant job-config endpoint. This is the fast way to answer "which
  * guests are backed up on a schedule", versus enumerating actual archives
  * (which, on a PBS datastore, forces a slow walk of the chunk store).
@@ -100,9 +100,9 @@ export function register(server: McpServer): void {
       title: "List Backup Jobs",
       description:
         "List the scheduled backup jobs from Datacenter → Backup (reads the " +
-        "/cluster/backup job config — instant, unlike enumerating archives). " +
+        "/cluster/backup job config, instant, unlike enumerating archives). " +
         "Shows each job's schedule, target storage, what it covers (all / " +
-        "specific guests / pool, minus exclusions), mode, and enabled state — " +
+        "specific guests / pool, minus exclusions), mode, and enabled state: " +
         "the fast way to answer 'which guests have a scheduled backup'.",
       annotations: READ,
     },
@@ -117,7 +117,7 @@ export function register(server: McpServer): void {
           const state = isEnabled(j) ? "✅ enabled" : "⚫ disabled";
           const next = j["next-run"] ? ` · next ${whenOf(j["next-run"])}` : "";
           lines.push(
-            `${state} **${j.id ?? "job"}** — ${scheduleOf(j)} → ${j.storage ?? "?"} (${j.mode ?? "snapshot"})\n` +
+            `${state} **${j.id ?? "job"}** - ${scheduleOf(j)} → ${j.storage ?? "?"} (${j.mode ?? "snapshot"})\n` +
               `   covers: ${targetOf(j)}${next}` +
               (j.comment ? `\n   ${j.comment}` : ""),
           );
