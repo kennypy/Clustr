@@ -1,4 +1,4 @@
-# Terms of Service — Clustr
+# Terms of Service: Clustr
 
 _Last updated: 2025_
 

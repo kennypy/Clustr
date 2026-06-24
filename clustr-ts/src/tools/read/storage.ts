@@ -84,7 +84,7 @@ export function register(server: McpServer): void {
         const lines = [`## Storage Pools (${mapped.length} total)\n`];
         for (const p of mapped) {
           lines.push(
-            `💾 **${p.name}** (${p.node}) — ${p.type}\n` +
+            `💾 **${p.name}** (${p.node}) - ${p.type}\n` +
               `   ${usageBar(p.usedPct)} ${p.usedPct}%  ` +
               `${p.used} / ${p.total} GB  (${p.avail} GB free)`,
           );

@@ -26,7 +26,7 @@ try {
   execSync("npx --yes @anthropic-ai/mcpb pack . clustr.mcpb", { stdio: "inherit" });
 
   console.log(
-    `\n✅ clustr.mcpb built as ${version} — import it in Claude Desktop ` +
+    `\n✅ clustr.mcpb built as ${version}: import it in Claude Desktop ` +
       "(it installs as a new version, so updates just work).",
   );
 } finally {

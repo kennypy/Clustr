@@ -208,9 +208,9 @@ export function register(server: McpServer): void {
           force,
         );
         const head = overwrite
-          ? `⚠️ **VM Restore Request — Step 1 of 2 (OVERWRITE)**\n\nThis will ` +
+          ? `⚠️ **VM Restore Request: Step 1 of 2 (OVERWRITE)**\n\nThis will ` +
             `**destroy existing VM ${vmid}** on **${node}** and replace it with the backup.`
-          : `⚠️ **VM Restore Request — Step 1 of 2**\n\nThis will restore the backup ` +
+          : `⚠️ **VM Restore Request: Step 1 of 2**\n\nThis will restore the backup ` +
             `into **new VM ${vmid}** on **${node}**.`;
         return (
           `${head}\n\n` +

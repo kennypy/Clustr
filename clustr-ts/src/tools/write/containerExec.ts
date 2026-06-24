@@ -1,11 +1,11 @@
 /**
- * run_container_command — run a shell command inside an LXC container.
+ * run_container_command: run a shell command inside an LXC container.
  *
  * Proxmox exposes no REST `exec` for containers, so this drives the container
  * **console**: it opens a `termproxy` session, connects the `vncwebsocket`,
  * types a marker-wrapped command into the shell, and scrapes the output back
  * out of the terminal stream. That makes it inherently best-effort (it depends
- * on a normal `/bin/sh` prompt and clean PTY output) — but it's the only way to
+ * on a normal `/bin/sh` prompt and clean PTY output), but it's the only way to
  * run a command in an LXC over an API token alone, with no SSH to the host.
  *
  * Requires the container to be running and the token to hold VM.Console. Gated
@@ -178,7 +178,7 @@ export function register(server: McpServer): void {
       description:
         "Run a shell command inside a running LXC container and capture its output. " +
         "Proxmox has no exec API for containers, so this drives the container console " +
-        "and scrapes the result — it's best-effort (expects a normal /bin/sh prompt) " +
+        "and scrapes the result (it's best-effort, expects a normal /bin/sh prompt) " +
         "and can't split stdout from stderr. The command runs through the shell, so " +
         "`&&`, pipes, and redirection work (e.g. `apt-get update && apt-get -y " +
         "upgrade`); run things non-interactively (pass `-y`). The container must be " +

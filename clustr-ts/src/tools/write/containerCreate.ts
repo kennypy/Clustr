@@ -146,7 +146,7 @@ export function register(server: McpServer): void {
 
         if (!args.confirm) {
           return (
-            `🔎 **Review — container not yet created.**\n\n${config}\n` +
+            `🔎 **Review: container not yet created.**\n\n${config}\n` +
             "Call `create_container` again with the same arguments plus `confirm=true` to create it."
           );
         }
@@ -172,7 +172,7 @@ export function register(server: McpServer): void {
 
         let startLine = "";
         if (startStatus === "ok") {
-          startLine = "▶️ Start requested — the container is booting.\n";
+          startLine = "▶️ Start requested. The container is booting.\n";
         } else if (startStatus) {
           startLine =
             `⚠️ The container was created but the start request failed: ${startStatus.slice(8)}. ` +

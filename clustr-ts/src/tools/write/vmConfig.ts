@@ -1,5 +1,5 @@
 /**
- * Write tools to reconfigure and grow a QEMU VM — the management half that was
+ * Write tools to reconfigure and grow a QEMU VM: the management half that was
  * missing between create and delete. Config changes are reversible (set the
  * value back); disk resize is grow-only (Proxmox does not shrink), so it is
  * additive and safe.
@@ -46,7 +46,7 @@ export function register(server: McpServer): void {
         if (description !== undefined) body.description = description;
         if (tags !== undefined) body.tags = tags;
         if (Object.keys(body).length === 0) {
-          throw new ProxmoxError("Nothing to change — provide at least one field.");
+          throw new ProxmoxError("Nothing to change. Provide at least one field.");
         }
         await proxmoxPut(`/nodes/${node}/qemu/${vmid}/config`, body);
         return (

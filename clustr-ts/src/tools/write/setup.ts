@@ -1,5 +1,5 @@
 /**
- * setup_clustr — streamlined onboarding.
+ * setup_clustr: streamlined onboarding.
  *
  * Two paths, one tool:
  *  - Guided (default): given a host IP, returns the Proxmox login URL plus a
@@ -12,7 +12,7 @@
  *
  * Registered before the multi-host patch so its `host` argument is a raw IP/
  * hostname (not a configured-endpoint name) and it works with zero endpoints
- * configured — you need it precisely when nothing is set up yet.
+ * configured: you need it precisely when nothing is set up yet.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -76,7 +76,7 @@ async function getTicket(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Could not reach Proxmox at ${c.base} — ${msg}`);
+    throw new Error(`Could not reach Proxmox at ${c.base}: ${msg}`);
   }
   if (!resp.ok) {
     const body = await resp.text();
@@ -160,7 +160,7 @@ async function provision(args: {
   const t = await getTicket(c, args.adminUser, args.adminPassword);
   const role = args.mode === "full" ? CLUSTR_ROLE : READONLY_ROLE;
 
-  // 1. Role (full mode only — readonly reuses the built-in PVEAuditor).
+  // 1. Role (full mode only, readonly reuses the built-in PVEAuditor).
   if (args.mode === "full") {
     const add = await pv(c, t, "POST", "/access/roles", {
       roleid: CLUSTR_ROLE,
@@ -184,7 +184,7 @@ async function provision(args: {
     // Non-fatal unless the next step fails; many setups pre-create the user.
   }
 
-  // 3. Token — the secret is returned exactly once.
+  // 3. Token: the secret is returned exactly once.
   const tok = await pv(
     c,
     t,
@@ -205,7 +205,7 @@ async function provision(args: {
   const value = tok.data?.value;
   if (!value) throw new Error("Proxmox created the token but returned no secret value.");
 
-  // 4. ACL — grant the user (privsep=0 token inherits it) the role at '/'.
+  // 4. ACL: grant the user (privsep=0 token inherits it) the role at '/'.
   const acl = await pv(c, t, "PUT", "/access/acl", {
     path: "/",
     users: args.user,
@@ -233,7 +233,7 @@ export function register(server: McpServer): void {
         "snippet that creates the token with exactly the privileges Clustr needs, " +
         "then you copy the secret back. Optionally provide `admin_user` + " +
         "`admin_password` (with confirm=true) and Clustr provisions the token over " +
-        "the API for you — the password is used once and never stored. Use " +
+        "the API for you: the password is used once and never stored. Use " +
         "`mode: readonly` for a read-only (PVEAuditor) token.",
       inputSchema: {
         host: z
@@ -274,7 +274,7 @@ export function register(server: McpServer): void {
           .describe(
             "Only relevant on the automated (admin_password) path: acknowledge " +
               "sending the admin password over an UNVERIFIED TLS connection " +
-              "(verify_ssl=false). Off by default — the tool refuses rather than " +
+              "(verify_ssl=false). Off by default: the tool refuses rather than " +
               "risk a MITM capturing your root password.",
           ),
         add_as_endpoint: z
@@ -303,19 +303,19 @@ export function register(server: McpServer): void {
 
         const wantsAuto = Boolean(args.admin_user && args.admin_password);
         if (!wantsAuto) {
-          // Guided path — also nudges toward the automated option.
+          // Guided path, also nudges toward the automated option.
           return formatGuide({ host, port, mode, user, tokenName });
         }
 
         // The automated path sends a Proxmox admin password to the host. Refuse
         // to do that over an unverified TLS connection unless explicitly
-        // acknowledged — a MITM on the path would otherwise capture root creds.
+        // acknowledged: a MITM on the path would otherwise capture root creds.
         if (!args.verify_ssl && !args.allow_insecure_tls) {
           return (
             `⛔ **Refusing to send your admin password over unverified TLS.**\n\n` +
             `You're using the automated path (admin_user + admin_password) with ` +
             "`verify_ssl=false`, so the password would cross the network without " +
-            "certificate verification — a man-in-the-middle could capture your " +
+            "certificate verification: a man-in-the-middle could capture your " +
             "Proxmox root credentials.\n\nEither:\n" +
             "- set `verify_ssl=true` (if the host has a trusted or pinned cert), or\n" +
             "- on a trusted LAN where you accept the risk, re-run with " +
@@ -328,7 +328,7 @@ export function register(server: McpServer): void {
 
         if (!args.confirm) {
           return (
-            "🔎 **Review — nothing created yet.** With `confirm=true` I will log in " +
+            "🔎 **Review: nothing created yet.** With `confirm=true` I will log in " +
             `to **${host}:${port}** as \`${args.admin_user}\` (password used once, ` +
             "not stored) and create:\n" +
             (mode === "full"
@@ -368,8 +368,8 @@ export function register(server: McpServer): void {
               persistable,
             );
             endpointLine = persistable
-              ? `\n✅ Registered and saved as endpoint **${ep.name}** — try \`list_nodes\`.`
-              : `\n✅ Registered as endpoint **${ep.name}** for this session — try ` +
+              ? `\n✅ Registered and saved as endpoint **${ep.name}** - try \`list_nodes\`.`
+              : `\n✅ Registered as endpoint **${ep.name}** for this session - try ` +
                 `\`list_nodes\` (host: ${ep.name}). To keep it across restarts, paste the ` +
                 "values above into the Clustr extension's settings form (stored in your " +
                 "OS keychain).";
@@ -381,7 +381,7 @@ export function register(server: McpServer): void {
 
         return [
           `✅ **Token created** on ${host}.${res.verified ? " Verified it works." : ""}`,
-          res.verified ? "" : "\n⚠️ Created, but a test call didn't succeed yet — the ACL may take a moment.",
+          res.verified ? "" : "\n⚠️ Created, but a test call didn't succeed yet (the ACL may take a moment).",
           "\n**Paste these into Clustr to finish setup:**",
           `- **Host:** \`${host}\`${port === 8006 ? "" : `   **Port:** \`${port}\``}`,
           `- **User:** \`${user}\``,

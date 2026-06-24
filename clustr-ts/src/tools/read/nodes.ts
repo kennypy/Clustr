@@ -42,7 +42,7 @@ export function register(server: McpServer): void {
         for (const n of nodes) {
           const icon = n.status === "online" ? "🟢" : "🔴";
           lines.push(
-            `${icon} **${n.node}** — ${n.status}\n` +
+            `${icon} **${n.node}** - ${n.status}\n` +
               `   CPU: ${pct(n.cpu ?? 0)}%  ` +
               `RAM: ${gb(n.mem ?? 0)} / ${gb(n.maxmem ?? 0)} GB  ` +
               `Uptime: ${hours(n.uptime ?? 0)}h`,
@@ -99,7 +99,7 @@ export function register(server: McpServer): void {
         const lines = [`## Services on ${node}\n`];
         for (const s of services) {
           const icon = s.state === "running" ? "🟢" : "🔴";
-          lines.push(`${icon} **${s.name}** — ${s.state} (${s.desc ?? ""})`);
+          lines.push(`${icon} **${s.name}** - ${s.state} (${s.desc ?? ""})`);
         }
         return lines.join("\n");
       }),

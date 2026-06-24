@@ -1,5 +1,5 @@
 /**
- * Networking reads — node interfaces (the System → Network view) and guest IP
+ * Networking reads: node interfaces (the System → Network view) and guest IP
  * addresses (VMs via the guest agent, containers via their running interfaces).
  * "What's VM 100's IP?" is a constant question Clustr previously couldn't answer.
  */
@@ -22,8 +22,8 @@ export function register(server: McpServer): void {
     {
       title: "List Node Network Interfaces",
       description:
-        "List a node's network interfaces — bridges, bonds, VLANs, physical NICs " +
-        "— with addresses and active state (the System → Network view).",
+        "List a node's network interfaces (bridges, bonds, VLANs, physical NICs) " +
+        "with addresses and active state (the System → Network view).",
       inputSchema: { node: z.string().describe("Node name (e.g. 'pve')") },
       annotations: READ,
     },
@@ -39,8 +39,8 @@ export function register(server: McpServer): void {
           const addr = i.cidr || i.address || "—";
           const ports = i.bridge_ports || i.slaves || "";
           lines.push(
-            `- **${i.iface}** (${i.type}) — ${addr}${i.active ? "" : " — inactive"}` +
-              (ports ? ` — ports: ${ports}` : ""),
+            `- **${i.iface}** (${i.type}) - ${addr}${i.active ? "" : " - inactive"}` +
+              (ports ? ` - ports: ${ports}` : ""),
           );
         }
         return lines.join("\n");
@@ -71,7 +71,7 @@ export function register(server: McpServer): void {
               `/nodes/${node}/qemu/${vmid}/agent/network-get-interfaces`,
             )) as Record<string, any>;
           } catch {
-            return `No IPs available for VM ${vmid} — the QEMU guest agent isn't responding (it must be installed and running in the guest).`;
+            return `No IPs available for VM ${vmid}. The QEMU guest agent isn't responding (it must be installed and running in the guest).`;
           }
           const ifaces = (data.result ?? []) as Record<string, any>[];
           const lines = [`## VM ${vmid} addresses\n`];

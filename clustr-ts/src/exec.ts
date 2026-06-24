@@ -4,7 +4,7 @@
  *
  * The VM path uses the QEMU guest agent and gets clean, structured output. The
  * LXC path has no REST exec, so it drives the console terminal over a websocket
- * and has to *scrape* output back out of a PTY stream — that's the fragile part,
+ * and has to *scrape* output back out of a PTY stream. That's the fragile part,
  * so the wrapping and parsing live here as side-effect-free functions that the
  * unit tests exercise against captured transcripts.
  */
@@ -56,7 +56,7 @@ export function wrapForConsole(command: string, m: Markers): string {
 }
 
 export interface ParsedConsole {
-  /** True once the end marker (with an exit code) was seen — i.e. command done. */
+  /** True once the end marker (with an exit code) was seen, i.e. command done. */
   complete: boolean;
   /** Captured stdout/stderr between the markers (best-effort, ANSI-stripped). */
   output: string;
@@ -69,7 +69,7 @@ export interface ParsedConsole {
  *
  * The transcript contains the *echoed* command line (which itself mentions both
  * markers) followed by the real output framed by the markers. We key off the
- * end marker `<end>:<digits>` — the echoed line has `:$?` literally, so only the
+ * end marker `<end>:<digits>`: the echoed line has `:$?` literally, so only the
  * genuine completion matches `\d+`. The output then runs from the last begin
  * marker before that point up to the end marker.
  */
@@ -126,7 +126,7 @@ export function formatExecResult(
 ): string {
   const lines: string[] = [];
   if (r.timedOut) {
-    lines.push(`⏱️ **Command timed out** on ${guest} — it may still be running.`);
+    lines.push(`⏱️ **Command timed out** on ${guest} (it may still be running).`);
   } else if (r.exitCode === 0) {
     lines.push(`✅ **Command succeeded** on ${guest} (exit code 0).`);
   } else if (r.exitCode === null) {

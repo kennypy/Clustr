@@ -1,12 +1,12 @@
 /**
- * Streamable HTTP transport — lets the full tool set run as a *remote* MCP
+ * Streamable HTTP transport: lets the full tool set run as a *remote* MCP
  * connector (added to claude.ai / mobile), not just the local stdio extension.
  *
  * Loaded only when HTTP mode is selected, so the stdio/desktop path never pulls
  * in Express. Stateful sessions (one server instance per MCP session).
  *
  * Auth: if a login password is configured, the built-in OAuth server protects
- * /mcp (Bearer tokens) — safe to expose behind a tunnel. Without a password it
+ * /mcp (Bearer tokens). Safe to expose behind a tunnel. Without a password it
  * binds 127.0.0.1 and REFUSES a non-loopback bind unless explicitly overridden.
  */
 
@@ -57,7 +57,7 @@ export async function runHttp(
   if (authEnabled && (opts.auth!.password.length < 12)) {
     console.error(
       "WARNING: CLUSTR_AUTH_PASSWORD is short (<12 chars). It's the single secret " +
-        "protecting your whole cluster over the internet — use a long, random " +
+        "protecting your whole cluster over the internet: use a long, random " +
         "passphrase.",
     );
   }
@@ -88,7 +88,7 @@ export async function runHttp(
     try {
       allowedHosts = [new URL(opts.publicUrl).host];
     } catch {
-      /* malformed CLUSTR_PUBLIC_URL — leave unset rather than break startup */
+      /* malformed CLUSTR_PUBLIC_URL, leave unset rather than break startup */
     }
   }
 
@@ -159,7 +159,7 @@ export async function runHttp(
       );
       if (!LOOPBACK.has(opts.host) && !authEnabled) {
         console.error(
-          "WARNING: non-loopback with no app-level auth — ensure a front door authenticates.",
+          "WARNING: non-loopback with no app-level auth. Ensure a front door authenticates.",
         );
       }
       if (authEnabled && !opts.publicUrl) {

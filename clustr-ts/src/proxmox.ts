@@ -1,10 +1,10 @@
 /**
- * Proxmox API client — multi-endpoint.
+ * Proxmox API client: multi-endpoint.
  *
  * Which endpoint a call hits is carried in an AsyncLocalStorage set per tool
  * invocation (see runWithEndpoint), so the tool layer's proxmoxGet/Post/Put/
  * Delete keep their simple (path, body) signatures and don't need to thread a
- * host through every call. When nothing is set, the default endpoint is used —
+ * host through every call. When nothing is set, the default endpoint is used,
  * which is the single-host case, unchanged.
  */
 
@@ -120,7 +120,7 @@ async function request(
   if (opts.body) {
     const form = new URLSearchParams();
     for (const [k, v] of Object.entries(opts.body)) {
-      // Array values are repeated keys — that's how the Proxmox API receives
+      // Array values are repeated keys: that's how the Proxmox API receives
       // array-typed parameters (e.g. the guest-agent `command` argv list).
       if (Array.isArray(v)) {
         for (const item of v) {
@@ -139,7 +139,7 @@ async function request(
     resp = await fetch(url, { method, headers, body, dispatcher: dispatcherFor(ep) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new ProxmoxError(`Cannot reach Proxmox '${ep.name}' at ${ep.host}:${ep.port} — ${msg}`);
+    throw new ProxmoxError(`Cannot reach Proxmox '${ep.name}' at ${ep.host}:${ep.port}: ${msg}`);
   }
 
   const textBody = await resp.text();
@@ -178,7 +178,7 @@ export function proxmoxDelete(path: string, query?: Params): Promise<unknown> {
  * no REST `exec` for containers, so running a command means driving the console
  * terminal over a websocket. The connection inherits the endpoint's host, port,
  * API-token Authorization header, and TLS-verification setting, so callers stay
- * out of the auth/transport details — same as the proxmoxGet/Post helpers.
+ * out of the auth/transport details, same as the proxmoxGet/Post helpers.
  */
 export function openProxmoxWebsocket(path: string, query?: Params): WebSocket {
   assertSafeApiPath(path);

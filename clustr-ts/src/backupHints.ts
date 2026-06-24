@@ -2,7 +2,7 @@
  * "Back it up first" awareness for destructive guest operations.
  *
  * Before a delete is confirmed, this surfaces the backup-capable storages on the
- * node — and specifically calls out a Proxmox Backup Server if one is attached —
+ * node (and specifically calls out a Proxmox Backup Server if one is attached)
  * so the model (and user) realise there's a safe option and can choose to back up
  * or clone instead of just destroying. It runs inside the tool's host context, so
  * it routes to the right endpoint automatically.
@@ -42,7 +42,7 @@ export function formatBackupHint(
   const pbsNote = pbs.length
     ? `A **Proxmox Backup Server** is attached (\`${pbs
         .map((p) => p.storage)
-        .join("`, `")}\`) — ideal for this. `
+        .join("`, `")}\`). Ideal for this. `
     : "";
 
   return (
@@ -57,7 +57,7 @@ export function formatBackupHint(
 
 /**
  * Fetch the node's backup-capable storages and format the hint. Returns "" on
- * any error — a hint must never get in the way of the actual operation.
+ * any error: a hint must never get in the way of the actual operation.
  */
 export async function backupBeforeDestroyHint(
   node: string,

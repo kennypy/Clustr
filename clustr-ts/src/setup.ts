@@ -1,5 +1,5 @@
 /**
- * Onboarding helpers for the `setup_clustr` tool — pure and unit-tested.
+ * Onboarding helpers for the `setup_clustr` tool: pure and unit-tested.
  *
  * Goal: turn "here's my Proxmox host IP" into a correctly-scoped API token with
  * the least fuss. Proxmox's web UI can't pre-fill an API-token's privileges from
@@ -11,9 +11,9 @@
  */
 
 /** The least-privilege role Clustr's *management* tools need. Curated to cover
- *  every write tool — power, config, snapshots, backup/restore, clone, migrate,
+ *  every write tool (power, config, snapshots, backup/restore, clone, migrate,
  *  downloads, plus VM.Monitor (guest-agent exec) and VM.Console (LXC console
- *  exec) — without granting blanket admin. Read-only setups use PVEAuditor. */
+ *  exec)) without granting blanket admin. Read-only setups use PVEAuditor. */
 export const CLUSTR_PRIVS: readonly string[] = [
   "Datastore.Audit",
   "Datastore.AllocateSpace",
@@ -62,8 +62,8 @@ export function privsForApi(): string {
  *
  *  Security: the result is interpolated into `https://${host}:${port}/...` for a
  *  request that, on the automated path, carries a Proxmox **admin password**. So
- *  this rejects anything that could redirect that request elsewhere — userinfo
- *  (`user:pass@host`), an embedded scheme, path, query, or fragment — and locks
+ *  this rejects anything that could redirect that request elsewhere (userinfo
+ *  (`user:pass@host`), an embedded scheme, path, query, or fragment) and locks
  *  the host to a bare hostname / IPv4 / bracketed IPv6, mirroring the validation
  *  `endpoints.normalize()` applies to persisted endpoints. Without this, a host
  *  like `root:pw@evil.com` would POST the admin password to `evil.com`. */
@@ -85,11 +85,11 @@ export function parseHostInput(raw: string): { host: string; port: number } {
       host = s.slice(0, idx);
       port = Number.parseInt(s.slice(idx + 1), 10);
     }
-    // Bare hostname or IPv4 only — nothing that can carry credentials (`@`), a
+    // Bare hostname or IPv4 only: nothing that can carry credentials (`@`), a
     // port we didn't parse, or any other URL machinery.
     if (!/^[A-Za-z0-9.-]+$/.test(host)) {
       throw new Error(
-        `Invalid Proxmox host '${host}': use a bare hostname, IPv4, or [IPv6] — ` +
+        `Invalid Proxmox host '${host}': use a bare hostname, IPv4, or [IPv6]: ` +
           "no scheme, path, credentials ('@'), or embedded port.",
       );
     }
@@ -114,7 +114,7 @@ export interface SnippetOptions {
  * A single copy-paste shell snippet for the Proxmox node shell that creates a
  * dedicated user + API token with exactly the privileges Clustr needs and prints
  * the secret. Idempotent-ish: re-running updates the role and is safe if the
- * user already exists (adding an existing *token* still errors — by design, so
+ * user already exists (adding an existing *token* still errors, by design, so
  * you don't silently clobber one).
  */
 export function buildProvisionScript(o: SnippetOptions): string {
@@ -156,12 +156,12 @@ export function formatGuide(args: {
       "without handing it your root credentials.\n",
     `**1. Open your Proxmox web UI:** ${url}`,
     "   Log in as `root` (or any admin).\n",
-    "**2. Open a node shell** — in the UI: *Datacenter → your node → ›_ Shell* " +
-      "(or SSH to the node as root) — and paste this:\n",
+    "**2. Open a node shell** (in the UI: *Datacenter → your node → ›_ Shell* " +
+      "or SSH to the node as root) and paste this:\n",
     "```bash",
     script,
     "```\n",
-    "The last command prints a table with a **`value`** field — that's your token " +
+    "The last command prints a table with a **`value`** field: that's your token " +
       "secret, shown **once**. Copy it.\n",
     "**3. Give the values back to Clustr** to finish setup:",
     `   - **Host:** \`${host}\`${port === 8006 ? "" : `   **Port:** \`${port}\``}`,

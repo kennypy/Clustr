@@ -1,5 +1,5 @@
 /**
- * Resource pool tools — the Datacenter → Permissions → Pools view. Lets you see
+ * Resource pool tools: the Datacenter → Permissions → Pools view. Lets you see
  * pools and their members (relevant to the pool-scoped token model Clustr's docs
  * recommend).
  */
@@ -30,7 +30,7 @@ export function register(server: McpServer): void {
         if (!pools.length) return "No resource pools configured.";
         const lines = [`## Resource pools (${pools.length})\n`];
         for (const p of pools) {
-          lines.push(`- **${p.poolid}**${p.comment ? ` — ${p.comment}` : ""}`);
+          lines.push(`- **${p.poolid}**${p.comment ? ` - ${p.comment}` : ""}`);
         }
         lines.push("\nUse `get_pool` to see a pool's members.");
         return lines.join("\n");
@@ -58,7 +58,7 @@ export function register(server: McpServer): void {
           } else {
             const icon = m.status === "running" ? "🟢" : "⚫";
             lines.push(
-              `- ${icon} ${m.type === "qemu" ? "VM" : "CT"} ${m.vmid} ${m.name ?? ""} (${m.node}) — ${m.status ?? "?"}`,
+              `- ${icon} ${m.type === "qemu" ? "VM" : "CT"} ${m.vmid} ${m.name ?? ""} (${m.node}) - ${m.status ?? "?"}`,
             );
           }
         }

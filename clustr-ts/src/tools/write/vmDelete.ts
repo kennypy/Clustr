@@ -121,7 +121,7 @@ async function confirmVmDelete(token: string, vmName: string): Promise<string> {
   const currentName = config.name ?? `vm-${vmid}`;
   if (currentName !== name) {
     throw new ProxmoxError(
-      `VM ${vmid} is now named '${currentName}', not '${name}' — the VMID may ` +
+      `VM ${vmid} is now named '${currentName}', not '${name}'. The VMID may ` +
         "have been reused since the delete request. Nothing was deleted. Call " +
         "vm_delete_request again.",
     );
@@ -154,7 +154,7 @@ export function register(server: McpServer): void {
         const { token, name } = await requestVmDelete(node, vmid);
         const hint = await backupBeforeDestroyHint(node, "vm");
         return (
-          `⚠️ **VM Deletion Request — Step 1 of 2**\n\n` +
+          `⚠️ **VM Deletion Request: Step 1 of 2**\n\n` +
           `VM **${name}** (ID: ${vmid}) on node **${node}** is queued for deletion.\n\n` +
           "To permanently delete it, call `vm_delete_confirm` with:\n" +
           `- \`confirmation_token\`: \`${token}\`\n` +

@@ -1,6 +1,6 @@
 # Self-hosted remote Clustr: the connector + a Cloudflare Tunnel in front.
 # Clustr authenticates callers with its own built-in OAuth (CLUSTR_AUTH_PASSWORD),
-# so the tunnel just needs to route your hostname to it — no Cloudflare Access
+# so the tunnel just needs to route your hostname to it: no Cloudflare Access
 # service-token gymnastics required.
 #
 #   1. cp .env.example .env  &&  fill it in (Proxmox token, a strong
@@ -16,7 +16,7 @@ services:
     container_name: clustr
     restart: unless-stopped
     env_file: .env
-    # No host port published — cloudflared reaches it over the internal network.
+    # No host port published: cloudflared reaches it over the internal network.
     expose:
       - "8080"
 

@@ -1,5 +1,5 @@
 /**
- * get_metrics_history — RRD performance history (the UI graphs). Turns a
+ * get_metrics_history: RRD performance history (the UI graphs). Turns a
  * point-in-time reading into a trend: "RAM has been pinned at 90% for days"
  * instead of "RAM is 90% right now". Reads /…/rrddata and summarizes avg/peak.
  */
@@ -102,7 +102,7 @@ export function register(server: McpServer): void {
           path = `/nodes/${node}/${seg}/${vmid}/rrddata`;
         }
         const target = kind === "node" ? node : `${kind} ${vmid} on ${node}`;
-        return `## Metrics — ${target}\n\n${await metricsSummary(path, timeframe, isNode)}`;
+        return `## Metrics - ${target}\n\n${await metricsSummary(path, timeframe, isNode)}`;
       }),
   );
 }

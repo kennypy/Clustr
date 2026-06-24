@@ -1,6 +1,6 @@
 /**
  * Write tools to clone a QEMU VM or LXC container (including from a template).
- * Additive — creates a new guest at a new ID; the source is untouched. A linked
+ * Additive: creates a new guest at a new ID; the source is untouched. A linked
  * clone (default for templates) is fast and space-efficient; full=true makes an
  * independent full copy.
  */

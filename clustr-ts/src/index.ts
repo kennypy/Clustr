@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Clustr MCP server (TypeScript) — entry point.
+ * Clustr MCP server (TypeScript): entry point.
  *
  * Runs over stdio as a local subprocess (the model of a Claude Desktop / MCPB
  * extension): no network port, no bind, no transport-auth surface. Safety comes

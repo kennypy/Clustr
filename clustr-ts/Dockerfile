@@ -1,4 +1,4 @@
-# Clustr (TypeScript) — remote MCP connector image.
+# Clustr (TypeScript): remote MCP connector image.
 # Multi-stage: build with dev deps, ship a slim runtime with prod deps only.
 
 FROM node:22-slim AS build
@@ -18,7 +18,7 @@ COPY --from=build /app/dist ./dist
 
 # Runs in HTTP mode, bound to all interfaces *inside the container* so the
 # tunnel/proxy on the same network can reach it. It still refuses to start
-# unauthenticated unless CLUSTR_AUTH_PASSWORD is set (or the override) — so set a
+# unauthenticated unless CLUSTR_AUTH_PASSWORD is set (or the override), so set a
 # password in your .env before exposing it.
 ENV CLUSTR_TRANSPORT=http \
     CLUSTR_HTTP_HOST=0.0.0.0 \

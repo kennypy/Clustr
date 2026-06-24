@@ -1,10 +1,10 @@
 /**
- * Endpoint registry — Clustr can manage several Proxmox clusters from one
+ * Endpoint registry: Clustr can manage several Proxmox clusters from one
  * instance. Endpoints come from (in priority order):
- *   1. CLUSTR_ENDPOINTS         — a JSON array of endpoint objects
- *   2. CLUSTR_ENDPOINTS_FILE    — a writable JSON file (also where add/remove
+ *   1. CLUSTR_ENDPOINTS         - a JSON array of endpoint objects
+ *   2. CLUSTR_ENDPOINTS_FILE    - a writable JSON file (also where add/remove
  *                                 persist), so endpoints can be managed at runtime
- *   3. PROXMOX_* env            — the single-endpoint shortcut (named "default"),
+ *   3. PROXMOX_* env            - the single-endpoint shortcut (named "default"),
  *                                 so existing single-host setups keep working
  *                                 unchanged.
  */
@@ -54,7 +54,7 @@ export function normalize(e: Record<string, any>): Endpoint {
   // a scheme, path, userinfo (`@`), query/fragment, or an embedded port.
   if (!/^[A-Za-z0-9.-]+$/.test(host) && !/^\[[0-9A-Fa-f:]+\]$/.test(host)) {
     throw new Error(
-      `Invalid endpoint host '${host}': use a bare hostname, IPv4, or [IPv6] — ` +
+      `Invalid endpoint host '${host}': use a bare hostname, IPv4, or [IPv6], ` +
         "no scheme, path, '@', or embedded port.",
     );
   }
@@ -109,7 +109,7 @@ function load(): Map<string, Endpoint> {
   if (s) map.set(s.name, s);
 
   // 2. CLUSTR_ENDPOINTS (JSON) and 3. the endpoints file *extend* it (and may
-  //    override by name) — so "one main node + extra clusters" is intuitive.
+  //    override by name), so "one main node + extra clusters" is intuitive.
   const json = process.env.CLUSTR_ENDPOINTS?.trim();
   if (json) for (const e of JSON.parse(json)) map.set(e.name, normalize(e));
 
@@ -150,7 +150,7 @@ export function hasEndpoint(name: string): boolean {
 export function defaultEndpointName(): string {
   const map = load();
   // Prefer an explicit "default" (the PROXMOX_* single host). Otherwise fall
-  // back to the sole/first endpoint — important after a runtime add_endpoint /
+  // back to the sole/first endpoint, important after a runtime add_endpoint /
   // setup_clustr on a fresh instance, so the new endpoint is usable without
   // having to name it on every call.
   if (map.has(defaultName)) return defaultName;
@@ -162,7 +162,7 @@ export function isMultiHost(): boolean {
 
 /** Whether endpoint changes can be persisted to disk (an endpoints file is set).
  *  False on a stock desktop install, where durable config lives in the settings
- *  form (OS keychain) instead — so callers can register session-only and tell
+ *  form (OS keychain) instead, so callers can register session-only and tell
  *  the user to paste into the form rather than failing. */
 export function canPersistEndpoints(): boolean {
   return Boolean(filePath());
