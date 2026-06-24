@@ -51,7 +51,7 @@ Pass an explicit version for a release: `npm run pack -- 0.3.0`.
   task follow-up, metrics history (RRD trends), pools, networking + guest IPs,
   pending updates + apt repos, replication, cluster log, and a one-call
   **`cluster_review`**.
-- ✅ Write tools (38): power, snapshots, two-step delete, create, backup/restore,
+- ✅ Write tools (37): power, snapshots, two-step delete, create, backup/restore,
   reconfigure, grow disks, clone, **migrate**, and **downloads**. Same safeguards
   throughout: `confirm=true` on destructive ops, two-step token flows (single-use
   5-min token + exact-identifier match + re-verification), and the hyphenated
@@ -101,9 +101,6 @@ for a review / health check / audit.
 
 Full VM/container parity: power, snapshots, delete, create, config, resize,
 clone, migrate, **backup, and restore** all have both variants.
-
-These backup/restore tools are TypeScript-only for now (the Python build is at
-36 tools); they can be ported to Python later if needed.
 
 ### Run commands inside guests (`run_vm_command` / `run_container_command`)
 Run a shell command *inside* a guest and get stdout/stderr/exit code back,

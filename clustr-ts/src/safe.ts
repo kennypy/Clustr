@@ -4,7 +4,7 @@
  * `safe` wraps a tool body so no exception escapes to the MCP caller: every
  * failure becomes actionable text. `text` builds the MCP result shape, and
  * `needsConfirm` is the standard "not executed, confirm first" message for
- * destructive tools (mirrors the Python implementation).
+ * destructive tools.
  */
 
 import { ProxmoxError } from "./proxmox.js";
