@@ -120,6 +120,95 @@ non-interactively (`-y`).
   it best-effort (expects a normal `/bin/sh` prompt, can't split stdout from
   stderr): the container must be running and the token needs `VM.Console`.
 
+### Every tool (alphabetical)
+
+All **78** tools. The *Kind* column: **Read** (no changes), **Write** (mutates, destructive ops gated by `confirm=true` / two-step tokens), **Exec** (runs commands inside a guest), **Setup**, **Endpoint** (multi-cluster management).
+
+<details><summary>Full list of 78 tools</summary>
+
+| Tool | Kind | What it does |
+|------|------|--------------|
+| `add_endpoint` | Endpoint | Add Proxmox Endpoint |
+| `check_proxmox_updates` | Read | Check for Proxmox Updates |
+| `clone_container` | Write | Clone Container |
+| `clone_vm` | Write | Clone VM |
+| `cluster_review` | Read | Review Proxmox Cluster |
+| `container_delete_confirm` | Write | Confirm Container Deletion (Step 2 of 2) |
+| `container_delete_request` | Write | Request Container Deletion (Step 1 of 2) |
+| `create_container` | Write | Create LXC Container |
+| `create_container_backup` | Write | Create Container Backup |
+| `create_container_snapshot` | Write | Create Container Snapshot |
+| `create_vm` | Write | Create Virtual Machine |
+| `create_vm_backup` | Write | Create VM Backup |
+| `create_vm_snapshot` | Write | Create VM Snapshot |
+| `delete_container_snapshot` | Write | Delete Container Snapshot |
+| `delete_vm_snapshot` | Write | Delete VM Snapshot |
+| `download_from_url` | Write | Download ISO/Template from URL |
+| `download_template` | Write | Download Container Template |
+| `get_cluster_log` | Read | Get Cluster Log |
+| `get_cluster_status` | Read | Get Cluster Status |
+| `get_container` | Read | Get Container Details |
+| `get_container_status` | Read | Get Container Status |
+| `get_guest_ips` | Read | Get Guest IP Addresses |
+| `get_metrics_history` | Read | Get Metrics History (Trend) |
+| `get_node` | Read | Get Node Details |
+| `get_node_services` | Read | Get Node Services |
+| `get_pool` | Read | Get Pool Members |
+| `get_storage` | Read | Get Storage Details |
+| `get_task_log` | Read | Get Task Log |
+| `get_task_status` | Read | Get Task Status |
+| `get_vm` | Read | Get VM Details |
+| `get_vm_status` | Read | Get VM Status |
+| `list_apt_repositories` | Read | List APT Repositories |
+| `list_available_templates` | Read | List Downloadable Templates |
+| `list_backup_jobs` | Read | List Backup Jobs |
+| `list_container_backups` | Read | List Container Backups |
+| `list_container_snapshots` | Read | List Container Snapshots |
+| `list_containers` | Read | List Containers |
+| `list_endpoints` | Read | List Proxmox Endpoints |
+| `list_isos` | Read | List ISO Images |
+| `list_networks` | Read | List Node Network Interfaces |
+| `list_node_updates` | Read | List Pending Updates |
+| `list_nodes` | Read | List Nodes |
+| `list_pools` | Read | List Resource Pools |
+| `list_replication` | Read | List Replication Jobs |
+| `list_storage` | Read | List Storage Pools |
+| `list_storage_content` | Read | List Storage Content |
+| `list_tasks` | Read | List Recent Tasks |
+| `list_templates` | Read | List Container Templates |
+| `list_vm_backups` | Read | List VM Backups |
+| `list_vm_snapshots` | Read | List VM Snapshots |
+| `list_vms` | Read | List Virtual Machines |
+| `migrate_container` | Write | Migrate Container to Another Node |
+| `migrate_vm` | Write | Migrate VM to Another Node |
+| `reboot_container` | Write | Reboot Container (Graceful) |
+| `reboot_vm` | Write | Reboot VM (Graceful) |
+| `remove_endpoint` | Endpoint | Remove Proxmox Endpoint |
+| `reset_vm` | Write | Reset VM (Hard Reset) |
+| `resize_container_disk` | Write | Resize Container Disk (Grow) |
+| `resize_vm_disk` | Write | Resize VM Disk (Grow) |
+| `restore_container_confirm` | Write | Confirm Container Restore (Step 2 of 2) |
+| `restore_container_request` | Write | Request Container Restore (Step 1 of 2) |
+| `restore_vm_confirm` | Write | Confirm VM Restore (Step 2 of 2) |
+| `restore_vm_request` | Write | Request VM Restore (Step 1 of 2) |
+| `rollback_container_snapshot` | Write | Rollback Container to Snapshot |
+| `rollback_vm_snapshot` | Write | Rollback VM to Snapshot |
+| `run_container_command` | Exec | Run Command in LXC Container (Console) |
+| `run_vm_command` | Exec | Run Command in VM (Guest Agent) |
+| `setup_clustr` | Setup | Set Up Clustr (Get an API Token) |
+| `shutdown_container` | Write | Shutdown Container (Graceful) |
+| `shutdown_vm` | Write | Shutdown VM (Graceful) |
+| `start_container` | Write | Start Container |
+| `start_vm` | Write | Start VM |
+| `stop_container` | Write | Stop Container (Force) |
+| `stop_vm` | Write | Stop VM (Force) |
+| `update_container_config` | Write | Update Container Config |
+| `update_vm_config` | Write | Update VM Config |
+| `vm_delete_confirm` | Write | Confirm VM Deletion (Step 2 of 2) |
+| `vm_delete_request` | Write | Request VM Deletion (Step 1 of 2) |
+
+</details>
+
 ## Develop
 
 ```bash
