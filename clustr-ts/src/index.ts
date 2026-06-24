@@ -10,6 +10,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { LOGO_DATA_URI } from "./branding.js";
 import { register as registerPrompts } from "./prompts.js";
 import { patchForMultiHost } from "./multihost.js";
 import { register as registerEndpoints } from "./tools/read/endpoints.js";
@@ -51,7 +52,16 @@ import { register as registerVmExec } from "./tools/write/vmExec.js";
 import { register as registerContainerExec } from "./tools/write/containerExec.js";
 
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: "clustr", version: "0.1.0" });
+  const server = new McpServer({
+    name: "clustr",
+    version: "0.1.0",
+    title: "Clustr (Proxmox)",
+    websiteUrl: "https://github.com/kennypy/Clustr",
+    // Advertised to connector clients so Claude can show the Clustr mark on the
+    // connector card. A self-contained data: URI so it needs no public URL and
+    // works identically over stdio and HTTP.
+    icons: [{ src: LOGO_DATA_URI, mimeType: "image/svg+xml", sizes: ["any"] }],
+  });
 
   // Endpoint management registers FIRST, on the unpatched server, so these tools
   // have no injected `host` and work even with zero endpoints configured (you

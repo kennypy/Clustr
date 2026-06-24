@@ -23,6 +23,8 @@
 
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
+import { LOGO_DATA_URI } from "./branding.js";
+
 import type { Express, Request, Response } from "express";
 import express from "express";
 import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
@@ -381,9 +383,11 @@ function loginPage(opts: {
        </form>`
     : "";
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Clustr: Sign in</title></head>
     <body style="font-family:system-ui,sans-serif;background:#f4f6fb;margin:0">
       <div style="max-width:360px;margin:12vh auto;background:#fff;padding:28px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
+        <img src="${LOGO_DATA_URI}" alt="" width="56" height="56" style="display:block;margin:0 0 12px;border-radius:14px">
         <h1 style="font-size:20px;margin:0 0 4px">Clustr</h1>
         <p style="color:#667;margin:0 0 18px">Sign in to connect your Proxmox.</p>
         ${consent}${err}${form}
