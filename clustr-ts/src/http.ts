@@ -18,6 +18,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 import { bearerAuthMiddleware, mountOAuth, type OAuthConfig } from "./oauth.js";
+import { LOGO_SVG } from "./branding.js";
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"]);
 const MAX_SESSIONS = 256;
@@ -68,6 +69,14 @@ export async function runHttp(
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok", service: "clustr", auth: authEnabled ? "oauth" : "none" });
   });
+
+  // Brand mark for the sign-in page tab and as a favicon fallback some clients
+  // fetch for the connector card. Public and cacheable; it's just a logo.
+  const favicon = (_req: Request, res: Response): void => {
+    res.type("image/svg+xml").set("Cache-Control", "public, max-age=86400").send(LOGO_SVG);
+  };
+  app.get("/favicon.svg", favicon);
+  app.get("/favicon.ico", favicon);
 
   // Public base URL used as the OAuth issuer / resource id. Behind a tunnel this
   // must be the public HTTPS URL (CLUSTR_PUBLIC_URL); otherwise we derive a local one.

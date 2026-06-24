@@ -3,6 +3,7 @@
   "name": "clustr",
   "display_name": "Clustr - Proxmox",
   "version": "0.1.0",
+  "icon": "icon.png",
   "description": "Manage your Proxmox VE cluster (nodes, VMs, LXC containers) from Claude.",
   "long_description": "Clustr exposes your Proxmox VE infrastructure as MCP tools so you can inspect and manage nodes, VMs, and LXC containers directly from Claude. Runs locally over stdio: no network port is opened. It can only do what the Proxmox API token you provide is allowed to do; use a least-privilege token (PVEAuditor for read-only).",
   "author": {
