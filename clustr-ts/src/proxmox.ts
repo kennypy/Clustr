@@ -54,6 +54,13 @@ export function runWithEndpoint<T>(name: string | undefined, fn: () => T): T {
 // warning is loud but fires once per endpoint rather than on every request.
 const warnedInsecureTls = new Set<string>();
 
+/** Name of the endpoint the current call is routed to (the active
+ *  AsyncLocalStorage store, or the default). Used to key per-endpoint caches
+ *  (e.g. the Proxmox version) without threading the endpoint through callers. */
+export function activeEndpointName(): string {
+  return als.getStore() ?? defaultEndpointName();
+}
+
 function currentEndpoint(): Endpoint {
   const name = als.getStore() ?? defaultEndpointName();
   const ep = getEndpoint(name);
