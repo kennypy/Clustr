@@ -16,14 +16,20 @@ import { runWithEndpoint } from "./proxmox.js";
 
 /**
  * Identifier arguments that get interpolated into the API path as a single
- * segment (`/nodes/${node}/...`, `/pools/${poolid}`). Lock them to the Proxmox
- * identifier charset so a value like `pve/qemu/100/config` can't smuggle extra
- * path segments past `assertSafeApiPath` (which only blocks `..` and control
- * chars, not structural `/`). Numbers (vmid/ctid) are already safe via zod, and
- * UPIDs have their own parser. Centralised here so every tool is covered without
- * editing ~25 modules.
+ * segment (`/nodes/${node}/...`, `/pools/${poolid}`, `/storage/${storage}/...`).
+ * Lock them to the Proxmox identifier charset so a value like
+ * `pve/qemu/100/config` can't smuggle extra path segments past
+ * `assertSafeApiPath` (which only blocks `..` and control chars, not structural
+ * `/`). Numbers (vmid/ctid) are already safe via zod, `snapname` is validated at
+ * its call sites, and UPIDs have their own parser. Centralised here so every
+ * tool is covered without editing ~25 modules.
+ *
+ * `storage` is included because several tools interpolate it directly
+ * (download_from_url, download_template, list_storage_content, get_storage);
+ * Proxmox storage IDs are exactly this charset, so no legitimate value is
+ * rejected.
  */
-const PATH_ID_FIELDS = ["node", "poolid"] as const;
+const PATH_ID_FIELDS = ["node", "poolid", "storage"] as const;
 const SAFE_ID = /^[A-Za-z0-9._-]+$/;
 
 export function invalidPathIdentifier(args: Record<string, unknown>): string | null {
