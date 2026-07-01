@@ -11,8 +11,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { proxmoxGet, proxmoxPost } from "../../proxmox.js";
+import { ProxmoxError, proxmoxGet, proxmoxPost } from "../../proxmox.js";
 import { safe } from "../../safe.js";
+import { atLeast, getProxmoxVersion } from "../../version.js";
 
 const READ = {
   readOnlyHint: true,
@@ -129,7 +130,10 @@ export function register(server: McpServer): void {
       description:
         "Download a file from a URL directly onto a storage, typically an ISO " +
         "(content=iso) or a container template (content=vztmpl). The storage " +
-        "must accept that content type.",
+        "must accept that content type. Needs a token with `Sys.AccessNetwork` " +
+        "on the node (PVE 8.2+) or, on older nodes, `Sys.Modify`; the Clustr " +
+        "role grants Sys.AccessNetwork, so a token made on PVE 8.0/8.1 will 403 " +
+        "here until the node is upgraded or granted Sys.Modify.",
       inputSchema: {
         node: z.string().describe("Node name"),
         storage: z.string().describe("Target storage (e.g. 'local')"),
@@ -147,10 +151,36 @@ export function register(server: McpServer): void {
     async ({ node, storage, url, content, filename }) =>
       safe("download_from_url", async () => {
         const name = sanitizeDownloadName(filename || url.split("/").pop() || "download");
-        const task = await proxmoxPost(
-          `/nodes/${node}/storage/${storage}/download-url`,
-          { url, content, filename: name },
-        );
+        let task: unknown;
+        try {
+          task = await proxmoxPost(
+            `/nodes/${node}/storage/${storage}/download-url`,
+            { url, content, filename: name },
+          );
+        } catch (err) {
+          // The common failure here is a privilege 403: /download-url needs
+          // Sys.AccessNetwork (PVE 8.2+) or Sys.Modify (older). Detect the node's
+          // version so the message is specific instead of a bare 403.
+          if (err instanceof ProxmoxError && err.statusCode === 403) {
+            const ver = await getProxmoxVersion();
+            if (ver && !atLeast(ver, 8, 2)) {
+              throw new ProxmoxError(
+                `Download denied (403) and node '${node}' is Proxmox ${ver.version}. The ` +
+                  "/download-url endpoint needs `Sys.AccessNetwork`, which only exists on PVE " +
+                  "8.2+; on this version the token needs `Sys.Modify` on `/` instead. Grant " +
+                  "Sys.Modify to the Clustr role, or upgrade the node to 8.2+ (where the " +
+                  "narrower Sys.AccessNetwork the Clustr role already grants applies).",
+              );
+            }
+            throw new ProxmoxError(
+              `Download denied (403). The token needs \`Sys.AccessNetwork\` on the node ` +
+                "(PVE 8.2+) or `Sys.Modify` on older nodes, plus `Datastore.AllocateTemplate` " +
+                "on the target storage." +
+                (ver ? ` Node version: ${ver.version}.` : ""),
+            );
+          }
+          throw err;
+        }
         return (
           `✅ Downloading **${name}** (${content}) from URL to **${storage}** on ${node}.\n` +
           `Task ID: \`${String(task)}\`\n\nFollow with \`get_task_status\`.`

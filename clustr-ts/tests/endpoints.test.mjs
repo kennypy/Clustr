@@ -2,12 +2,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { rmSync } from "node:fs";
+
 import {
   resetEndpoints,
   endpoints,
   defaultEndpointName,
   hasEndpoint,
   addEndpoint,
+  removeEndpoint,
   canPersistEndpoints,
 } from "../dist/endpoints.js";
 
@@ -66,6 +71,31 @@ test("addEndpoint(persist=true) without a file throws (explicit add_endpoint pat
     () => addEndpoint({ name: "x", host: "1.2.3.4", tokenName: "t", tokenValue: "s" }),
     /CLUSTR_ENDPOINTS_FILE/,
   );
+  clearEnv();
+  resetEndpoints();
+});
+
+test("removing the current default falls back to a live endpoint (no stale pointer)", () => {
+  clearEnv();
+  const file = join(tmpdir(), `clustr-eps-${process.pid}.json`);
+  process.env.CLUSTR_ENDPOINTS_FILE = file;
+  process.env.CLUSTR_ENDPOINTS = JSON.stringify([
+    { name: "home", host: "h1", tokenName: "t", tokenValue: "s" },
+    { name: "office", host: "h2", tokenName: "t", tokenValue: "s" },
+  ]);
+  resetEndpoints();
+  assert.equal(defaultEndpointName(), "home");
+  // Remove the endpoint the default currently points at. The cached defaultName
+  // now references a deleted entry; defaultEndpointName() must re-resolve to a
+  // remaining one rather than hand back a dangling name.
+  assert.equal(removeEndpoint("home"), true);
+  assert.equal(hasEndpoint("home"), false);
+  assert.equal(defaultEndpointName(), "office");
+  try {
+    rmSync(file);
+  } catch {
+    /* best-effort cleanup */
+  }
   clearEnv();
   resetEndpoints();
 });

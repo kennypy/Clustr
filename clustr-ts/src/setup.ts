@@ -13,13 +13,23 @@
 /** The least-privilege role Clustr's *management* tools need. Curated to cover
  *  every write tool (power, config, snapshots, backup/restore, clone, migrate,
  *  downloads, plus VM.Monitor (guest-agent exec) and VM.Console (LXC console
- *  exec)) without granting blanket admin. Read-only setups use PVEAuditor. */
+ *  exec)) without granting blanket admin. Read-only setups use PVEAuditor.
+ *
+ *  Note on `Sys.AccessNetwork`: the `download-url` endpoint (download_from_url)
+ *  lets a token pull an arbitrary URL through the node, so Proxmox gates it
+ *  behind `Sys.AccessNetwork` on the node (in addition to Datastore.Allocate*).
+ *  That privilege only exists on **PVE 8.2+**; on older nodes the tool needs
+ *  `Sys.Modify` instead, a much broader grant we deliberately don't hand a
+ *  least-privilege token. So Clustr's guided/auto setup targets PVE 8.2+ for the
+ *  download-from-URL tool; on 8.0/8.1 that one tool will 403 until you either
+ *  upgrade or grant Sys.Modify by hand. Everything else works on 8.0+. */
 export const CLUSTR_PRIVS: readonly string[] = [
   "Datastore.Audit",
   "Datastore.AllocateSpace",
   "Datastore.AllocateTemplate",
   "Pool.Audit",
   "Sys.Audit",
+  "Sys.AccessNetwork", // download_from_url (/download-url); PVE 8.2+ (see note above)
   "VM.Audit",
   "VM.PowerMgmt",
   "VM.Console",

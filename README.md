@@ -42,10 +42,22 @@ and never stored).
 ## Safety model
 
 Clustr can only do what the **Proxmox API token** you give it is allowed to do:
-use a least-privilege token (`PVEAuditor` for read-only). Destructive operations
-require an explicit `confirm=true` or a two-step single-use-token flow; deletes
-surface a backup/clone prompt (PBS-aware) first. The remote connector fails closed:
-it refuses to expose itself without a login password.
+use a least-privilege token (`PVEAuditor` for read-only). **The real security
+boundaries are the scope of that token and your MCP client's tool-approval UI.**
+
+Destructive tools are marked `destructiveHint: true` and **preview by default**:
+they don't act until called again with `confirm=true`, so a client that prompts
+on destructive tools puts a human in the loop before anything runs. Deletes use a
+two-step single-use-token flow that also re-checks the guest and refuses if the
+hostname changed (catching a reused VMID/CTID or a stale plan), and surface a
+backup/clone prompt (PBS-aware) first.
+
+Be clear-eyed about what `confirm=true` is, though: it — and the delete token —
+are set within the model's own turn, so they are **accident and staleness
+guards, not a human-in-the-loop guarantee.** An agent can set them itself. If you
+want a human to approve destructive actions, that gate lives in your MCP client,
+not in Clustr. The remote connector fails closed: it refuses to expose itself
+without a login password.
 
 ## License
 
