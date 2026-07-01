@@ -19,6 +19,7 @@ import { ProxmoxError, openProxmoxWebsocket, proxmoxPost } from "../../proxmox.j
 import { needsConfirm, safe } from "../../safe.js";
 import {
   formatExecResult,
+  looksLikeLoginPrompt,
   makeMarkers,
   parseConsoleOutput,
   wrapForConsole,
@@ -141,6 +142,23 @@ async function consoleExec(a: ExecArgs): Promise<string> {
       const parsed = parseConsoleOutput(raw, markers);
       if (parsed.complete) {
         finish({ exitCode: parsed.exitCode, combined: parsed.output });
+        return;
+      }
+      // No shell to run in: the container's console is a getty login prompt, so
+      // our command was typed as a username and will never complete. Fail fast
+      // with guidance instead of silently timing out.
+      if (looksLikeLoginPrompt(raw)) {
+        fail(
+          new ProxmoxError(
+            `Container ${a.ctid} on ${a.node} shows a login prompt on its console, ` +
+              "not a ready shell, so Clustr can't run a command over it. Give the " +
+              "container an auto-login root shell console (Proxmox: Options → Console " +
+              "mode → shell, or `pct set " +
+              `${a.ctid}` +
+              " --cmode shell`), then retry, or run the command in a QEMU VM with " +
+              "run_vm_command.",
+          ),
+        );
       }
     });
 

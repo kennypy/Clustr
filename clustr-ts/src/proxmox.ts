@@ -50,12 +50,26 @@ export function runWithEndpoint<T>(name: string | undefined, fn: () => T): T {
   return als.run(resolved, fn);
 }
 
+// Endpoints we've already warned about running with TLS verification off, so the
+// warning is loud but fires once per endpoint rather than on every request.
+const warnedInsecureTls = new Set<string>();
+
 function currentEndpoint(): Endpoint {
   const name = als.getStore() ?? defaultEndpointName();
   const ep = getEndpoint(name);
   if (!ep) {
     throw new ProxmoxError(
       "No Proxmox endpoint configured. Set PROXMOX_HOST/TOKEN_* (single host) or CLUSTR_ENDPOINTS (multiple).",
+    );
+  }
+  if (!ep.verifySsl && !warnedInsecureTls.has(ep.name)) {
+    warnedInsecureTls.add(ep.name);
+    // stderr, not stdout: stdout is the MCP stdio protocol channel.
+    console.error(
+      `WARNING: TLS verification is OFF for Proxmox endpoint '${ep.name}' (${ep.host}). ` +
+        "The API token is sent over an unverified connection and can be captured by a " +
+        "man-in-the-middle on the network path. Once the host has a trusted (or pinned) " +
+        "certificate, set verifySsl=true (or PROXMOX_VERIFY_SSL=true) for this endpoint.",
     );
   }
   return ep;

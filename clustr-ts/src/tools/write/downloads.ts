@@ -129,7 +129,10 @@ export function register(server: McpServer): void {
       description:
         "Download a file from a URL directly onto a storage, typically an ISO " +
         "(content=iso) or a container template (content=vztmpl). The storage " +
-        "must accept that content type.",
+        "must accept that content type. Needs a token with `Sys.AccessNetwork` " +
+        "on the node (PVE 8.2+) or, on older nodes, `Sys.Modify`; the Clustr " +
+        "role grants Sys.AccessNetwork, so a token made on PVE 8.0/8.1 will 403 " +
+        "here until the node is upgraded or granted Sys.Modify.",
       inputSchema: {
         node: z.string().describe("Node name"),
         storage: z.string().describe("Target storage (e.g. 'local')"),

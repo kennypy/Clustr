@@ -44,6 +44,9 @@ test("privilege lists are non-empty and include exec privileges", () => {
   // VM.Monitor (guest-agent exec) and VM.Console (LXC console exec) must be present.
   assert.ok(CLUSTR_PRIVS.includes("VM.Monitor"));
   assert.ok(CLUSTR_PRIVS.includes("VM.Console"));
+  // Sys.AccessNetwork is required by download_from_url (/download-url) on PVE
+  // 8.2+; without it the provisioned token 403s on that tool.
+  assert.ok(CLUSTR_PRIVS.includes("Sys.AccessNetwork"));
   assert.equal(privsForCli(), CLUSTR_PRIVS.join(" "));
   assert.equal(privsForApi(), CLUSTR_PRIVS.join(","));
 });
